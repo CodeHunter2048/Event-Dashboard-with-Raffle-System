@@ -13,7 +13,7 @@ export default function DashboardLayout({
         <Sidebar>
           <SidebarNav />
         </Sidebar>
-        <div className="flex flex-col h-screen lg:pl-[16rem]">
+        <div className="flex flex-col h-screen md:ml-[var(--sidebar-width-icon)] lg:ml-[var(--sidebar-width)] group-data-[sidebar-state=collapsed]/sidebar-wrapper:lg:ml-[var(--sidebar-width-icon)] transition-all duration-200 ease-in-out">
           <DashboardHeader />
           <main className="flex-1 overflow-y-auto p-4 lg:p-6">
             <div className="flex flex-col gap-4 lg:gap-6">

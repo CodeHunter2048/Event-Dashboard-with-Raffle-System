@@ -32,7 +32,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { SidebarNav } from './sidebar-nav';
@@ -51,6 +57,9 @@ export function DashboardHeader() {
           </Button>
         </SheetTrigger>
         <SheetContent side="left" className="flex flex-col">
+          <SheetHeader>
+            <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+          </SheetHeader>
           <SidebarNav />
         </SheetContent>
       </Sheet>
@@ -74,14 +83,14 @@ export function DashboardHeader() {
         <DropdownMenuTrigger asChild>
           <Button variant="secondary" size="icon" className="rounded-full">
             {userAvatar && (
-                <Image
-                    src={userAvatar.imageUrl}
-                    width={36}
-                    height={36}
-                    alt="User avatar"
-                    className="rounded-full"
-                    data-ai-hint={userAvatar.imageHint}
-                />
+              <Image
+                src={userAvatar.imageUrl}
+                width={36}
+                height={36}
+                alt="User avatar"
+                className="rounded-full"
+                data-ai-hint={userAvatar.imageHint}
+              />
             )}
             <span className="sr-only">Toggle user menu</span>
           </Button>

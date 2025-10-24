@@ -1,4 +1,4 @@
-import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
+import { SidebarProvider, Sidebar } from '@/components/ui/sidebar';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { SidebarNav } from '@/components/sidebar-nav';
 
@@ -13,9 +13,9 @@ export default function DashboardLayout({
         <Sidebar>
             <SidebarNav />
         </Sidebar>
-        <div className="flex flex-col lg:pl-[16rem]">
+        <div className="flex h-screen flex-col lg:pl-[16rem]">
           <DashboardHeader />
-          <main className="flex flex-1 flex-col gap-4 p-4 lg:gap-6 lg:p-6 bg-background">
+          <main className="flex flex-1 flex-col gap-4 overflow-y-auto p-4 lg:gap-6 lg:p-6">
             {children}
           </main>
         </div>

@@ -1,3 +1,112 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "prize1",
+      "description": "AI-Powered Drone",
+      "imageUrl": "https://images.unsplash.com/photo-1631021947936-811f7d6aaa9c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxkcm9uZSUyMHRlY2hub2xvZ3l8ZW58MHx8fHwxNzYxMjkyNzM5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "drone technology"
+    },
+    {
+      "id": "prize2",
+      "description": "GPU Cloud Credits",
+      "imageUrl": "https://images.unsplash.com/photo-1667372335936-3dc4ff716017?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxzZXJ2ZXIlMjBjb2RlfGVufDB8fHx8MTc2MTI4MDYzNHww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "server code"
+    },
+    {
+      "id": "prize3",
+      "description": "Mechanical Keyboard",
+      "imageUrl": "https://images.unsplash.com/photo-1729501309405-5710375095cb?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxrZXlib2FyZCUyMGdhbWluZ3xlbnwwfHx8fDE3NjEyNDc5NDJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "keyboard gaming"
+    },
+    {
+      "id": "prize4",
+      "description": "AI Conference Ticket",
+      "imageUrl": "https://images.unsplash.com/photo-1707061803305-58383ee49415?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxldmVudCUyMHRpY2tldHxlbnwwfHx8fDE3NjEyNTk5Nzl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "event ticket"
+    },
+    {
+      "id": "prize5",
+      "description": "AI Book Bundle",
+      "imageUrl": "https://images.unsplash.com/photo-1640726764974-c6d769ed897c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxib29rcyUyMHN0dWR5fGVufDB8fHx8MTc2MTI5MjczOXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "books study"
+    },
+    {
+      "id": "avatar1",
+      "description": "Avatar for Dr. Evelyn Reed",
+      "imageUrl": "https://images.unsplash.com/photo-1573496359142-b8d87734a5a2?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHx3b21hbiUyMHBvcnRyYWl0fGVufDB8fHx8MTc2MTI1ODc2Mnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman portrait"
+    },
+    {
+      "id": "avatar2",
+      "description": "Avatar for Ben Carter",
+      "imageUrl": "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxtYW4lMjBwb3J0cmFpdHxlbnwwfHx8fDE3NjEyNTU5NTR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man portrait"
+    },
+    {
+      "id": "avatar3",
+      "description": "Avatar for Olivia Chen",
+      "imageUrl": "https://images.unsplash.com/photo-1600275669439-14e40452d20b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHx3b21hbiUyMHByb2Zlc3Npb25hbHxlbnwwfHx8fDE3NjEyODc5MzR8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman professional"
+    },
+    {
+      "id": "avatar4",
+      "description": "Avatar for Marcus Grant",
+      "imageUrl": "https://images.unsplash.com/photo-1706645571146-8684302501a0?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWFuJTIwcHJvZmVzc2lvbmFsfGVufDB8fHx8MTc2MTI4ODg5M3ww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man professional"
+    },
+    {
+      "id": "avatar5",
+      "description": "Avatar for Sophia Loren",
+      "imageUrl": "https://images.unsplash.com/photo-1557080883-d9ce025fa255?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHx3b21hbiUyMGdsYXNzZXN8ZW58MHx8fHwxNzYxMjcwNTk4fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman glasses"
+    },
+    {
+      "id": "avatar6",
+      "description": "Avatar for Liam Wilson",
+      "imageUrl": "https://images.unsplash.com/photo-1656337789708-cdf37b07112d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8bWFuJTIwc21pbGluZ3xlbnwwfHx8fDE3NjEyMzc2Nzl8MA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man smiling"
+    },
+    {
+      "id": "avatar7",
+      "description": "Avatar for Ava Garcia",
+      "imageUrl": "https://images.unsplash.com/photo-1685538636736-ffcf9b783c27?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHx3b21hbiUyMHN0dWRlbnR8ZW58MHx8fHwxNzYxMjkyNzM5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman student"
+    },
+    {
+      "id": "avatar8",
+      "description": "Avatar for Noah Rodriguez",
+      "imageUrl": "https://images.unsplash.com/photo-1612694790876-bec1383fbb40?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw3fHxtYW4lMjBnbGFzc2VzfGVufDB8fHx8MTc2MTE4MDYzMnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man glasses"
+    },
+    {
+      "id": "avatar9",
+      "description": "Avatar for Isabella Martinez",
+      "imageUrl": "https://images.unsplash.com/photo-1525134479668-1bee5c7c6845?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHx3b21hbiUyMHNtaWxpbmd8ZW58MHx8fHwxNzYxMjQ2NTkwfDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman smiling"
+    },
+    {
+      "id": "avatar10",
+      "description": "Avatar for James Brown",
+      "imageUrl": "https://picsum-photos/seed/10/100/100",
+      "imageHint": "man suit"
+    },
+    {
+      "id": "avatar11",
+      "description": "Avatar for Dr. Alan Turing",
+      "imageUrl": "https://images.unsplash.com/photo-1607218377490-0828ea2e134b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtYW4lMjB2aW50YWdlfGVufDB8fHx8MTc2MTI5MjczOXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "man vintage"
+    },
+    {
+      "id": "avatar12",
+      "description": "Avatar for Grace Hopper",
+      "imageUrl": "https://images.unsplash.com/photo-1635080478415-aa36f75ec865?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHx3b21hbiUyMHZpbnRhZ2V8ZW58MHx8fHwxNzYxMjkyNzM5fDA&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "woman vintage"
+    },
+    {
+      "id": "user-avatar",
+      "description": "Default user avatar for header",
+      "imageUrl": "https://images.unsplash.com/photo-1584940121057-90e9151fa7c1?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8cGVyc29uJTIwcHJvZmVzc2lvbmFsfGVufDB8fHx8MTc2MTI1MzY5MXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "person professional"
+    }
+  ]
 }

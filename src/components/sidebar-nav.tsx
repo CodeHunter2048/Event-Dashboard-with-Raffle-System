@@ -15,6 +15,7 @@ import {
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import {
+  SidebarContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
@@ -42,7 +43,7 @@ export function SidebarNav() {
           <span className="">AI Event Hub</span>
         </Link>
       </div>
-      <div className="flex-1">
+      <SidebarContent>
         <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
           <SidebarMenu>
             {navItems.map((item) => (
@@ -65,7 +66,7 @@ export function SidebarNav() {
             ))}
           </SidebarMenu>
         </nav>
-      </div>
+      </SidebarContent>
     </>
   );
 }

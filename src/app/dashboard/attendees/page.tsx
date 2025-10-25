@@ -1,7 +1,6 @@
 'use client';
 
-import { File, PlusCircle, Upload, Ticket } from 'lucide-react';
-import Image from 'next/image';
+import { File, PlusCircle, Upload, Ticket, Printer } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -30,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 export default function AttendeesPage() {
   const generateTicket = async (attendee: Attendee) => {
@@ -68,7 +68,66 @@ export default function AttendeesPage() {
     doc.save(`ticket-${attendee.id}.pdf`);
   };
 
+  const generateAllTickets = async () => {
+    const doc = new jsPDF({
+      orientation: 'portrait',
+      unit: 'mm',
+      format: 'a4'
+    });
+
+    const ticketWidth = 90;
+    const ticketHeight = 50;
+    const margin = 5;
+    const ticketsPerRow = 2;
+    const ticketsPerPage = 5;
+    
+    let x = margin;
+    let y = margin;
+    let ticketCount = 0;
+
+    for (const attendee of attendees) {
+      if (ticketCount > 0 && ticketCount % ticketsPerPage === 0) {
+        doc.addPage();
+        x = margin;
+        y = margin;
+      }
+      
+      const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+        width: 35,
+        margin: 1,
+      });
+
+      // Ticket content
+      doc.rect(x, y, ticketWidth, ticketHeight);
+      doc.addImage(qrCodeDataURL, 'PNG', x + 50, y + 7.5, 35, 35);
+      
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text(attendee.id, x + 5, y + 10);
+
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.text(attendee.name, x + 5, y + 25);
+      
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(attendee.organization, x + 5, y + 35);
+
+      // Move to next position
+      if ((ticketCount + 1) % ticketsPerRow === 0) {
+          x = margin;
+          y += ticketHeight + margin;
+      } else {
+          x += ticketWidth + margin;
+      }
+      ticketCount++;
+    }
+
+    doc.save('all-attendee-tickets.pdf');
+  };
+
   return (
+    <TooltipProvider>
     <Tabs defaultValue="all">
       <div className="flex items-center">
         <TabsList>
@@ -77,10 +136,10 @@ export default function AttendeesPage() {
           <TabsTrigger value="not-checked-in">Not Checked-in</TabsTrigger>
         </TabsList>
         <div className="ml-auto flex items-center gap-2">
-          <Button size="sm" variant="outline" className="h-8 gap-1">
-            <File className="h-3.5 w-3.5" />
+          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={generateAllTickets}>
+            <Printer className="h-3.5 w-3.5" />
             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Export
+              Export All Tickets
             </span>
           </Button>
            <Button size="sm" variant="outline" className="h-8 gap-1">
@@ -151,10 +210,17 @@ export default function AttendeesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                         <Button variant="outline" onClick={() => generateTicket(attendee)}>
-                            <Ticket className="h-4 w-4 mr-2" />
-                            Generate Ticket
-                         </Button>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => generateTicket(attendee)}>
+                                <Ticket className="h-4 w-4" />
+                                <span className="sr-only">Generate Ticket</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate Ticket</p>
+                          </TooltipContent>
+                        </Tooltip>
                       </TableCell>
                     </TableRow>
                   );
@@ -165,5 +231,6 @@ export default function AttendeesPage() {
         </Card>
       </TabsContent>
     </Tabs>
+    </TooltipProvider>
   );
 }

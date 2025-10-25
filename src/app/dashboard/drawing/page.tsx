@@ -4,9 +4,12 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { attendees, prizes, Prize } from '@/lib/data';
+import { attendees, prizes, Prize, Winner } from '@/lib/data';
 import { Confetti } from '@/components/confetti';
-import { Award, Check, Redo, Users } from 'lucide-react';
+import { Award, Check, Redo, Users, Trophy, X } from 'lucide-react';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 const checkedInAttendees = attendees.filter(a => a.checkedIn);
 
@@ -15,10 +18,12 @@ type DrawingState = 'idle' | 'drawing' | 'revealed';
 export default function DrawingPage() {
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
   const [drawingState, setDrawingState] = useState<DrawingState>('idle');
-  const [winner, setWinner] = useState<typeof checkedInAttendees[0] | null>(null);
+  const [winner, setWinner] = useState<(typeof checkedInAttendees[0]) | null>(null);
   const [eligiblePool, setEligiblePool] = useState(checkedInAttendees);
   const [shuffledNames, setShuffledNames] = useState<string[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [winnersList, setWinnersList] = useState<Winner[]>([]);
 
   const handlePrizeChange = (prizeId: string) => {
     const prize = prizes.find(p => p.id === prizeId);
@@ -30,8 +35,8 @@ export default function DrawingPage() {
     if (!selectedPrize || eligiblePool.length === 0) return;
     setDrawingState('drawing');
     setShowConfetti(false);
+    setIsModalOpen(true);
     
-    // Create a long list of shuffled names for the animation
     let tempShuffled = [];
     for(let i=0; i<10; i++){
         tempShuffled.push(...[...eligiblePool].sort(() => Math.random() - 0.5));
@@ -44,28 +49,49 @@ export default function DrawingPage() {
     setTimeout(() => {
       setDrawingState('revealed');
       setShowConfetti(true);
-    }, 4000); // 3 seconds of animation + 1 for final reveal
+    }, 4000); 
   };
 
   const confirmWinner = () => {
-    if (!winner) return;
+    if (!winner || !selectedPrize) return;
+
+    const newWinnerEntry: Winner = {
+        attendee: winner,
+        prize: selectedPrize,
+        timestamp: new Date().toISOString(),
+        claimed: false, // Or true if claimed immediately
+    };
+    setWinnersList(prev => [newWinnerEntry, ...prev]);
+
     setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
-    if (selectedPrize) {
-      selectedPrize.remaining -= 1;
+    
+    const prizeIndex = prizes.findIndex(p => p.id === selectedPrize.id);
+    if(prizeIndex !== -1) {
+        prizes[prizeIndex].remaining -= 1;
     }
+
+    if(selectedPrize.remaining <= 1){
+        setSelectedPrize(null);
+    }
+    
     resetDraw();
   };
 
   const redraw = () => {
     if (!winner) return;
+    // Keep the winner out of the pool for this specific prize draw
     setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
+    resetDraw(false); // don't close modal
     startDrawing();
   };
   
-  const resetDraw = () => {
+  const resetDraw = (closeModal = true) => {
     setDrawingState('idle');
     setWinner(null);
     setShowConfetti(false);
+    if (closeModal) {
+      setIsModalOpen(false);
+    }
   }
 
   const NameCarousel = useCallback(() => {
@@ -92,19 +118,28 @@ export default function DrawingPage() {
         return () => clearInterval(interval);
     }, [drawingState, winner]);
 
-    if (drawingState === 'idle') {
+    if (drawingState === 'idle' && !isModalOpen) {
         return <div className="text-4xl text-muted-foreground">Ready to Draw</div>
     }
+
+    if (drawingState === 'idle' && isModalOpen) {
+      return (
+        <div className="flex items-center justify-center h-full">
+            <Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/>
+        </div>
+      );
+    }
+
 
     const transformY = `translateY(-${currentIndex * 100}%)`;
 
     return (
-        <div className="h-24 overflow-hidden relative">
-            <div className="absolute top-0 left-0 right-0 h-8 bg-gradient-to-b from-card to-transparent z-10"/>
-            <div className="absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-card to-transparent z-10"/>
+        <div className="h-32 overflow-hidden relative">
+            <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background to-transparent z-10"/>
+            <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-background to-transparent z-10"/>
             <div className="transition-transform duration-100 ease-linear" style={{ transform: transformY }}>
                 {shuffledNames.map((name, index) => (
-                    <div key={index} className="h-24 flex items-center justify-center text-4xl md:text-6xl font-bold">
+                    <div key={index} className="h-32 flex items-center justify-center text-5xl md:text-7xl font-bold">
                         {name}
                     </div>
                 ))}
@@ -112,7 +147,7 @@ export default function DrawingPage() {
         </div>
     )
 
-  }, [shuffledNames, drawingState, winner]);
+  }, [shuffledNames, drawingState, winner, isModalOpen]);
 
 
   return (
@@ -124,14 +159,14 @@ export default function DrawingPage() {
             <CardDescription>Choose which prize you want to draw for.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Select onValueChange={handlePrizeChange} disabled={drawingState !== 'idle'}>
+            <Select onValueChange={handlePrizeChange} value={selectedPrize?.id || ''} disabled={drawingState !== 'idle'}>
               <SelectTrigger>
                 <SelectValue placeholder="Select a prize..." />
               </SelectTrigger>
               <SelectContent>
                 {prizes.filter(p => p.remaining > 0).map(prize => (
                   <SelectItem key={prize.id} value={prize.id}>
-                    {prize.name} ({prize.tier})
+                    {prize.name} ({prize.tier}) - {prize.remaining} left
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -150,68 +185,112 @@ export default function DrawingPage() {
             <CardContent className="space-y-2">
               <h3 className="text-xl font-bold">{selectedPrize.name}</h3>
               <p className="text-muted-foreground">{selectedPrize.description}</p>
-              <p>
-                <span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining
-              </p>
-            </CardContent>
-            <CardContent>
-                <CardTitle className="flex items-center gap-2"><Users />Eligible Pool</CardTitle>
-                <p className="text-muted-foreground mt-2">{eligiblePool.length} checked-in attendees are eligible to win.</p>
+              <div className='grid grid-cols-2 gap-4'>
+                <p>
+                    <span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining
+                </p>
+                <div>
+                  <div className="flex items-center gap-2"><Users />Eligible Pool</div>
+                  <p className="text-muted-foreground mt-1">{eligiblePool.length} checked-in attendees are eligible to win.</p>
+                </div>
+              </div>
+               <Button
+                className="w-full mt-4"
+                size="lg"
+                onClick={startDrawing}
+                disabled={!selectedPrize || drawingState !== 'idle'}
+                >
+                Start Draw
+                </Button>
             </CardContent>
           </Card>
         )}
       </div>
 
-      <Card className="relative overflow-hidden">
-        {showConfetti && <Confetti />}
-        <CardHeader>
-          <CardTitle>2. The Draw</CardTitle>
-          <CardDescription>Click Start Draw to begin the animation.</CardDescription>
-        </CardHeader>
-        <CardContent className="flex flex-col items-center justify-center text-center py-12 md:py-20 min-h-[300px]">
-            <div className="mb-8">
-                <NameCarousel/>
-            </div>
+       <Card>
+            <CardHeader>
+                <CardTitle>Recent Winners</CardTitle>
+                <CardDescription>List of recently drawn winners.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                {winnersList.length === 0 ? (
+                    <p className="text-muted-foreground text-center py-8">No winners yet.</p>
+                ) : (
+                    <ul className="space-y-4">
+                        {winnersList.map((w, index) => {
+                             const avatar = PlaceHolderImages.find(p => p.id === `avatar${w.attendee.avatar}`);
+                            return (
+                            <li key={index} className="flex items-center gap-4">
+                                <Avatar>
+                                    {avatar && <AvatarImage src={avatar.imageUrl} alt={w.attendee.name}/>}
+                                    <AvatarFallback>{w.attendee.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
+                                </Avatar>
+                                <div className="flex-grow">
+                                    <p className="font-semibold">{w.attendee.name}</p>
+                                    <p className="text-sm text-muted-foreground">{w.attendee.organization}</p>
+                                </div>
+                                <div className="text-right">
+                                    <p className="font-semibold text-sm">{w.prize.name}</p>
+                                    <p className="text-xs text-muted-foreground">{w.prize.tier} Prize</p>
+                                </div>
+                            </li>
+                        )})}
+                    </ul>
+                )}
+            </CardContent>
+        </Card>
 
-            {drawingState === 'revealed' && winner && (
-                <div className="text-center animate-in fade-in zoom-in-90">
-                    <p className="text-lg text-accent font-semibold">WINNER!</p>
-                    <h3 className="text-3xl font-bold text-white">{winner.name}</h3>
-                    <p className="text-muted-foreground">{winner.organization}</p>
+        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+            <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0">
+                 {showConfetti && <Confetti />}
+                 <div className="flex-shrink-0 p-4 flex justify-between items-center">
+                    <h2 className="text-2xl font-bold">{selectedPrize?.name}</h2>
+                    <Button variant="ghost" size="icon" onClick={() => resetDraw()}><X/></Button>
+                 </div>
+
+                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80">
+                     <div className="mb-8">
+                        <NameCarousel/>
+                    </div>
+
+                    {drawingState === 'revealed' && winner && (
+                        <div className="text-center animate-in fade-in zoom-in-90">
+                            <p className="text-lg text-accent font-semibold">WINNER!</p>
+                             <div className="flex items-center gap-4 mt-4">
+                                <Avatar className="h-24 w-24 border-4 border-primary">
+                                    <AvatarImage src={PlaceHolderImages.find(p => p.id === `avatar${winner.avatar}`)?.imageUrl} alt={winner.name} />
+                                    <AvatarFallback className="text-4xl">{winner.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
+                                </Avatar>
+                                <div>
+                                    <h3 className="text-4xl font-bold text-white">{winner.name}</h3>
+                                    <p className="text-muted-foreground text-lg">{winner.organization}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </div>
-            )}
-        </CardContent>
-        <CardContent>
-          {drawingState === 'idle' && (
-            <Button
-              className="w-full"
-              size="lg"
-              onClick={startDrawing}
-              disabled={!selectedPrize}
-            >
-              Start Draw
-            </Button>
-          )}
+                
+                <div className="flex-shrink-0 p-4 bg-muted/50">
+                    {drawingState === 'revealed' && (
+                        <div className="grid grid-cols-2 gap-4">
+                        <Button size="lg" variant="outline" onClick={redraw}>
+                            <Redo className="mr-2 h-4 w-4" /> Redraw
+                        </Button>
+                        <Button size="lg" onClick={confirmWinner}>
+                            <Check className="mr-2 h-4 w-4" /> Confirm Winner
+                        </Button>
+                        </div>
+                    )}
+                     {drawingState === 'drawing' && (
+                        <Button className="w-full" size="lg" disabled>
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-foreground"></div>
+                            Drawing...
+                        </Button>
+                    )}
+                </div>
 
-          {drawingState === 'drawing' && (
-             <Button className="w-full" size="lg" disabled>
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary-foreground"></div>
-                Drawing...
-            </Button>
-          )}
-
-          {drawingState === 'revealed' && (
-            <div className="grid grid-cols-2 gap-4">
-              <Button size="lg" variant="outline" onClick={redraw}>
-                <Redo className="mr-2 h-4 w-4" /> Redraw
-              </Button>
-              <Button size="lg" onClick={confirmWinner}>
-                <Check className="mr-2 h-4 w-4" /> Confirm Winner
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+            </DialogContent>
+        </Dialog>
     </div>
   );
 }

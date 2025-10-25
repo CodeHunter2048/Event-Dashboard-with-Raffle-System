@@ -29,7 +29,7 @@ export default function DisplayPage() {
               Uniting Industry-Academia through Artificial Intelligence
             </h2>
             <p className="text-xl md:text-2xl text-slate-300">
-                An event by The International Graduate School of Artificial Intelligence, NYUST & BPSU
+                Welcome delegates!
             </p>
         </header>
 

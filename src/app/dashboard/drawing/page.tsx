@@ -130,7 +130,6 @@ export default function DrawingPage() {
       );
     }
 
-
     const transformY = `translateY(-${currentIndex * 100}%)`;
 
     return (
@@ -243,17 +242,18 @@ export default function DrawingPage() {
         <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isOpen) resetDraw(); else setIsModalOpen(true);}}>
             <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0">
                  {showConfetti && <Confetti />}
-                 <DialogHeader className="p-4 flex-shrink-0">
+                 <DialogHeader className="p-4 flex-shrink-0 border-b">
                     <DialogTitle className="text-2xl font-bold">{selectedPrize?.name}</DialogTitle>
                  </DialogHeader>
 
                 <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80 overflow-hidden">
-                     <div className="mb-8 w-full">
-                        <NameCarousel/>
-                    </div>
+                    {drawingState !== 'revealed' && <NameCarousel/>}
 
                     {drawingState === 'revealed' && winner && (
-                        <div className="text-center animate-in fade-in zoom-in-90">
+                        <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center">
+                             <div className="mb-8 w-full">
+                                <NameCarousel/>
+                            </div>
                             <p className="text-lg text-accent font-semibold">WINNER!</p>
                              <div className="flex items-center gap-4 mt-4">
                                 <Avatar className="h-24 w-24 border-4 border-primary">
@@ -269,7 +269,7 @@ export default function DrawingPage() {
                     )}
                 </div>
                 
-                <div className="flex-shrink-0 p-4 bg-muted/50">
+                <div className="flex-shrink-0 p-4 bg-muted/50 border-t">
                     {drawingState === 'revealed' && (
                         <div className="grid grid-cols-2 gap-4">
                         <Button size="lg" variant="outline" onClick={redraw}>
@@ -287,9 +287,10 @@ export default function DrawingPage() {
                         </Button>
                     )}
                 </div>
-
             </DialogContent>
         </Dialog>
     </div>
   );
 }
+
+    

@@ -99,9 +99,6 @@ export default function DrawingPage() {
     
     useEffect(() => {
         if (drawingState !== 'drawing') {
-            if(drawingState === 'revealed' && winner) {
-                 setCurrentIndex(shuffledNames.indexOf(winner.name));
-            }
             return;
         };
 
@@ -116,7 +113,7 @@ export default function DrawingPage() {
         }, 100);
 
         return () => clearInterval(interval);
-    }, [drawingState, winner]);
+    }, [drawingState]);
 
     if (drawingState === 'idle' && !isModalOpen) {
         return <div className="text-4xl text-muted-foreground">Ready to Draw</div>
@@ -146,7 +143,7 @@ export default function DrawingPage() {
         </div>
     )
 
-  }, [shuffledNames, drawingState, winner, isModalOpen]);
+  }, [shuffledNames, drawingState, isModalOpen]);
 
 
   return (
@@ -250,10 +247,7 @@ export default function DrawingPage() {
                     {drawingState !== 'revealed' && <NameCarousel/>}
 
                     {drawingState === 'revealed' && winner && (
-                        <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center">
-                             <div className="mb-8 w-full">
-                                <NameCarousel/>
-                            </div>
+                        <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center justify-center">
                             <p className="text-lg text-accent font-semibold">WINNER!</p>
                              <div className="flex items-center gap-4 mt-4">
                                 <Avatar className="h-24 w-24 border-4 border-primary">
@@ -292,5 +286,3 @@ export default function DrawingPage() {
     </div>
   );
 }
-
-    

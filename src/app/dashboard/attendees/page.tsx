@@ -1,4 +1,6 @@
-import { File, PlusCircle, Upload } from 'lucide-react';
+'use client';
+
+import { File, PlusCircle, Upload, Ticket } from 'lucide-react';
 import Image from 'next/image';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -9,13 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import {
   Table,
   TableBody,
@@ -30,11 +25,49 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { attendees } from '@/lib/data';
+import { attendees, Attendee } from '@/lib/data';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
 
 export default function AttendeesPage() {
+  const generateTicket = async (attendee: Attendee) => {
+    const doc = new jsPDF({
+      orientation: 'landscape',
+      unit: 'px',
+      format: [400, 150]
+    });
+
+    // Generate QR Code
+    const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+      width: 80,
+      margin: 2,
+    });
+
+    // Ticket Design
+    doc.setFontSize(14);
+    doc.text(`${attendee.id}`, 20, 40);
+    
+    doc.setFontSize(18);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`${attendee.name}`, 20, 70);
+
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${attendee.organization}`, 20, 90);
+    
+    doc.addImage(qrCodeDataURL, 'PNG', 300, 20, 80, 80);
+
+    doc.setDrawColor(180, 180, 180);
+    doc.line(10, 10, 390, 10); // Top
+    doc.line(10, 140, 390, 140); // Bottom
+    doc.line(10, 10, 10, 140); // Left
+    doc.line(390, 10, 390, 140); // Right
+    
+    doc.save(`ticket-${attendee.id}.pdf`);
+  };
+
   return (
     <Tabs defaultValue="all">
       <div className="flex items-center">
@@ -118,7 +151,10 @@ export default function AttendeesPage() {
                         )}
                       </TableCell>
                       <TableCell>
-                         <Button variant="outline">Generate QR</Button>
+                         <Button variant="outline" onClick={() => generateTicket(attendee)}>
+                            <Ticket className="h-4 w-4 mr-2" />
+                            Generate Ticket
+                         </Button>
                       </TableCell>
                     </TableRow>
                   );

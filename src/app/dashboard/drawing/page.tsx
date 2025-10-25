@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { attendees, prizes, Prize, Winner } from '@/lib/data';
 import { Confetti } from '@/components/confetti';
-import { Award, Check, Redo, Users, Trophy, X } from 'lucide-react';
+import { Award, Check, Redo, Users, Trophy } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -113,19 +113,7 @@ export default function DrawingPage() {
         }, 100);
 
         return () => clearInterval(interval);
-    }, [drawingState]);
-
-    if (drawingState === 'idle' && !isModalOpen) {
-        return <div className="text-4xl text-muted-foreground">Ready to Draw</div>
-    }
-
-    if (drawingState === 'idle' && isModalOpen) {
-      return (
-        <div className="flex items-center justify-center h-full">
-            <Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/>
-        </div>
-      );
-    }
+    }, [drawingState, shuffledNames]);
 
     const transformY = `translateY(-${currentIndex * 100}%)`;
 
@@ -143,7 +131,7 @@ export default function DrawingPage() {
         </div>
     )
 
-  }, [shuffledNames, drawingState, isModalOpen]);
+  }, [shuffledNames, drawingState]);
 
 
   return (
@@ -194,9 +182,9 @@ export default function DrawingPage() {
                 className="w-full mt-4"
                 size="lg"
                 onClick={startDrawing}
-                disabled={!selectedPrize || drawingState !== 'idle'}
+                disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0}
                 >
-                Start Draw
+                {eligiblePool.length === 0 ? 'No Eligible Attendees' : 'Start Draw'}
                 </Button>
             </CardContent>
           </Card>
@@ -244,8 +232,12 @@ export default function DrawingPage() {
                  </DialogHeader>
 
                 <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80 overflow-hidden">
-                    {drawingState !== 'revealed' && <NameCarousel/>}
-
+                    {drawingState === 'idle' && (
+                        <div className="flex items-center justify-center h-full">
+                            <Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/>
+                        </div>
+                    )}
+                    {drawingState === 'drawing' && <NameCarousel />}
                     {drawingState === 'revealed' && winner && (
                         <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center justify-center">
                             <p className="text-lg text-accent font-semibold">WINNER!</p>

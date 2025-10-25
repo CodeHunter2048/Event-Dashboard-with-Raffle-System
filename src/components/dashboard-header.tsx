@@ -48,7 +48,7 @@ const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
 export function DashboardHeader() {
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
-      <SidebarTrigger className="hidden lg:flex" />
+      <SidebarTrigger className="-ml-1" />
       <Sheet>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon" className="shrink-0 lg:hidden">

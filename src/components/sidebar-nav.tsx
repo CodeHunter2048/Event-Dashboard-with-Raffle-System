@@ -26,7 +26,7 @@ const navItems = [
   { href: '/dashboard/attendees', icon: Users, label: 'Attendees' },
   { href: '/dashboard/prizes', icon: Gift, label: 'Prizes' },
   { href: '/dashboard/check-in', icon: QrCode, label: 'Check-in' },
-  { href: '/dashboard/drawing', icon: Trophy, label: 'Drawing' },
+  { href: '/dashboard/drawing', icon: Trophy, label: 'Draw' },
   { href: '/dashboard/analytics', icon: BarChart, label: 'Analytics' },
   { href: '/dashboard/security', icon: Shield, label: 'Security' },
   { href: '/display', icon: Tv, label: 'Public Display' },

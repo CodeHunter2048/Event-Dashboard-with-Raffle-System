@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { attendees, prizes, Prize, Winner } from '@/lib/data';
 import { Confetti } from '@/components/confetti';
 import { Award, Check, Redo, Users, Trophy, X } from 'lucide-react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 
@@ -240,16 +240,15 @@ export default function DrawingPage() {
             </CardContent>
         </Card>
 
-        <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isOpen) resetDraw(); else setIsModalOpen(true);}}>
             <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0">
                  {showConfetti && <Confetti />}
-                 <div className="flex-shrink-0 p-4 flex justify-between items-center">
-                    <h2 className="text-2xl font-bold">{selectedPrize?.name}</h2>
-                    <Button variant="ghost" size="icon" onClick={() => resetDraw()}><X/></Button>
-                 </div>
+                 <DialogHeader className="p-4 flex-shrink-0">
+                    <DialogTitle className="text-2xl font-bold">{selectedPrize?.name}</DialogTitle>
+                 </DialogHeader>
 
-                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80">
-                     <div className="mb-8">
+                <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80 overflow-hidden">
+                     <div className="mb-8 w-full">
                         <NameCarousel/>
                     </div>
 

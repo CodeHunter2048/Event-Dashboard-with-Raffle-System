@@ -105,9 +105,7 @@ export default function AttendeesPage() {
 
     for (let i = 0; i < attendees.length; i++) {
       const attendee = attendees[i];
-      const isNewPage = i > 0 && i % ticketsPerPage === 0;
-
-      if (isNewPage) {
+      if (i > 0 && i % ticketsPerPage === 0) {
         doc.addPage();
         y = pageMargin;
       }
@@ -122,7 +120,7 @@ export default function AttendeesPage() {
       });
       
       // Background Gradient
-      const gradient = doc.context2d.createLinearGradient(pageMargin, y, ticketWidth, ticketHeight);
+      const gradient = doc.context2d.createLinearGradient(pageMargin, y, ticketWidth + pageMargin, y + ticketHeight);
       gradient.addColorStop(0, '#1E3A8A');
       gradient.addColorStop(1, '#06B6D4');
       doc.context2d.fillStyle = gradient;

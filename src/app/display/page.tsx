@@ -1,9 +1,8 @@
+'use client';
 import { attendees } from '@/lib/data';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-
-const checkedInAttendees = attendees.filter(a => a.checkedIn);
 
 // CSS for the scrolling animation
 const styles = `
@@ -17,14 +16,21 @@ const styles = `
 `;
 
 export default function DisplayPage() {
+  const checkedInAttendees = attendees.filter(a => a.checkedIn);
   return (
     <>
       <style>{styles}</style>
       <div className="flex h-screen flex-col items-center justify-center p-4 lg:p-8 space-y-8 bg-gradient-to-br from-background via-slate-900 to-blue-950">
         <header className="text-center max-w-5xl">
-          <p className="text-2xl lg:text-3xl font-normal tracking-tight text-slate-200">
-            The International Graduate School of Artificial Intelligence, National Yunlin University of Science and Technology, in partnership with BPSU will be conducting a seminar entitled <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-cyan-400">"AI for IA: Uniting Industry-Academia through Artificial Intelligence”</span> on October 29, 2025, from 8:00 AM, at the 3rd Floor, OSA Building, BPSU Main Campus.
-          </p>
+            <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 tracking-tight">
+              AI for IA
+            </h1>
+            <h2 className="text-2xl md:text-3xl font-semibold text-blue-200 mb-6">
+              Uniting Industry-Academia through Artificial Intelligence
+            </h2>
+            <p className="text-xl md:text-2xl text-slate-300">
+                An event by The International Graduate School of Artificial Intelligence, NYUST & BPSU
+            </p>
         </header>
 
         <div className="grid lg:grid-cols-3 gap-8 w-full max-w-7xl">

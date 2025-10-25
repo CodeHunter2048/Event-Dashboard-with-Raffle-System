@@ -1,4 +1,6 @@
-# **App Name**: AI Event Hub
+# **App Name**: AI for IA: Uniting Industry-Academia through Artificial Intelligence
+
+## Overview:
 
 ## Core Features:
 

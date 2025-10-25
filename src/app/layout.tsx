@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 const inter = Inter({ subsets: ['latin'], variable: '--font-sans' });
 
 export const metadata: Metadata = {
-  title: 'AI Event Hub',
+  title: 'AI for IA - Event Dashboard',
   description: 'Event management system for AI academic conference with QR-based check-in and random prize drawing functionality.',
 };
 

@@ -44,8 +44,8 @@ export default function AttendeesPage() {
       width: 80,
       margin: 2,
       color: {
-        dark: '#FFFFFF',
-        light: '#00000000'
+        dark: '#000000', // Black QR code
+        light: '#FFFFFF'  // White background for QR code
       }
     });
 
@@ -100,12 +100,12 @@ export default function AttendeesPage() {
     const ticketWidth = 190;
     const ticketHeight = 55;
     const pageMargin = 10;
-    const ticketsPerPage = 5;
+    const pageHeight = doc.internal.pageSize.getHeight();
     let y = pageMargin;
 
     for (let i = 0; i < attendees.length; i++) {
       const attendee = attendees[i];
-      if (i > 0 && i % ticketsPerPage === 0) {
+      if (y + ticketHeight > pageHeight - pageMargin) {
         doc.addPage();
         y = pageMargin;
       }
@@ -114,8 +114,8 @@ export default function AttendeesPage() {
         width: 120,
         margin: 1,
         color: {
-          dark: '#FFFFFF',
-          light: '#00000000'
+            dark: '#000000',
+            light: '#FFFFFF'
         }
       });
       

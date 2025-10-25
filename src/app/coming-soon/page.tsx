@@ -109,12 +109,7 @@ export default function ComingSoon() {
             </p>
           </div>
 
-          {/* Contact or Social Links (optional) */}
-          <div className="mt-12 pt-8 border-t border-white/10">
-            <p className="text-sm text-blue-300">
-              For inquiries: <a href="mailto:info@aiforIA.com" className="text-blue-200 hover:text-white underline">info@aiforIA.com</a>
-            </p>
-          </div>
+          
         </div>
       </div>
     </div>

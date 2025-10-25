@@ -36,35 +36,57 @@ export default function AttendeesPage() {
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'px',
-      format: [400, 150]
+      format: [450, 150]
     });
-
+    
     // Generate QR Code
     const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
       width: 80,
       margin: 2,
+      color: {
+        dark: '#FFFFFF',
+        light: '#00000000'
+      }
     });
 
-    // Ticket Design
-    doc.setFontSize(14);
-    doc.text(`${attendee.id}`, 20, 40);
+    // Add custom font (Inter) - jsPDF supports limited fonts, so we use a standard one
+    doc.setFont('helvetica', 'sans-serif');
     
-    doc.setFontSize(18);
+    // Background Gradient
+    const gradient = doc.context2d.createLinearGradient(0, 0, 450, 150);
+    gradient.addColorStop(0, '#1E293B');
+    gradient.addColorStop(1, '#0f172a');
+    doc.context2d.fillStyle = gradient;
+    doc.rect(0, 0, 450, 150);
+    doc.fill();
+
+    // Accent line
+    doc.setFillColor('#3B82F6');
+    doc.rect(0, 0, 5, 150);
+    doc.fill();
+    
+    // Attendee Info
+    doc.setTextColor('#FFFFFF');
+    doc.setFontSize(10);
+    doc.text(`ID: ${attendee.id}`, 20, 30);
+    
+    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text(`${attendee.name}`, 20, 70);
+    doc.text(attendee.name, 20, 70);
 
-    doc.setFontSize(14);
+    doc.setFontSize(16);
     doc.setFont('helvetica', 'normal');
-    doc.text(`${attendee.organization}`, 20, 90);
+    doc.setTextColor('#94A3B8');
+    doc.text(attendee.organization, 20, 95);
     
-    doc.addImage(qrCodeDataURL, 'PNG', 300, 20, 80, 80);
+    // QR Code
+    doc.addImage(qrCodeDataURL, 'PNG', 340, 35, 80, 80);
 
-    doc.setDrawColor(180, 180, 180);
-    doc.line(10, 10, 390, 10); // Top
-    doc.line(10, 140, 390, 140); // Bottom
-    doc.line(10, 10, 10, 140); // Left
-    doc.line(390, 10, 390, 140); // Right
-    
+    // Event Title
+    doc.setFontSize(10);
+    doc.setTextColor('#3B82F6');
+    doc.text('AI for IA Conference', 345, 130);
+
     doc.save(`ticket-${attendee.id}.pdf`);
   };
 
@@ -75,52 +97,56 @@ export default function AttendeesPage() {
       format: 'a4'
     });
 
-    const ticketWidth = 90;
-    const ticketHeight = 50;
-    const margin = 5;
-    const ticketsPerRow = 2;
+    const ticketWidth = 190;
+    const ticketHeight = 55;
+    const pageMargin = 10;
     const ticketsPerPage = 5;
-    
-    let x = margin;
-    let y = margin;
-    let ticketCount = 0;
+    let y = pageMargin;
 
-    for (const attendee of attendees) {
-      if (ticketCount > 0 && ticketCount % ticketsPerPage === 0) {
+    for (let i = 0; i < attendees.length; i++) {
+      const attendee = attendees[i];
+      const isNewPage = i > 0 && i % ticketsPerPage === 0;
+
+      if (isNewPage) {
         doc.addPage();
-        x = margin;
-        y = margin;
+        y = pageMargin;
       }
-      
+
       const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-        width: 35,
+        width: 120,
         margin: 1,
+        color: {
+          dark: '#FFFFFF',
+          light: '#00000000'
+        }
       });
-
-      // Ticket content
-      doc.rect(x, y, ticketWidth, ticketHeight);
-      doc.addImage(qrCodeDataURL, 'PNG', x + 50, y + 7.5, 35, 35);
       
+      // Background Gradient
+      const gradient = doc.context2d.createLinearGradient(pageMargin, y, ticketWidth, ticketHeight);
+      gradient.addColorStop(0, '#1E3A8A');
+      gradient.addColorStop(1, '#06B6D4');
+      doc.context2d.fillStyle = gradient;
+      doc.rect(pageMargin, y, ticketWidth, ticketHeight);
+      doc.fill();
+      
+      doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 140, y + 10, 35, 35);
+      
+      doc.setFont('helvetica', 'sans-serif');
+      doc.setTextColor('#FFFFFF');
+
       doc.setFontSize(8);
-      doc.setFont('helvetica', 'normal');
-      doc.text(attendee.id, x + 5, y + 10);
+      doc.text(`ID: ${attendee.id}`, pageMargin + 10, y + 15);
 
-      doc.setFontSize(12);
+      doc.setFontSize(16);
       doc.setFont('helvetica', 'bold');
-      doc.text(attendee.name, x + 5, y + 25);
+      doc.text(attendee.name, pageMargin + 10, y + 28);
       
-      doc.setFontSize(9);
+      doc.setFontSize(10);
       doc.setFont('helvetica', 'normal');
-      doc.text(attendee.organization, x + 5, y + 35);
+      doc.setTextColor('#E2E8F0');
+      doc.text(attendee.organization, pageMargin + 10, y + 38);
 
-      // Move to next position
-      if ((ticketCount + 1) % ticketsPerRow === 0) {
-          x = margin;
-          y += ticketHeight + margin;
-      } else {
-          x += ticketWidth + margin;
-      }
-      ticketCount++;
+      y += ticketHeight + 5;
     }
 
     doc.save('all-attendee-tickets.pdf');

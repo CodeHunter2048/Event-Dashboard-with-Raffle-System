@@ -66,6 +66,9 @@ export default function CheckInPage() {
   const [loading, setLoading] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
+  const isProcessingRef = useRef(false); // Flag to prevent multiple scans
+  const currentUser = 'Admin'; // In real app, get from auth context
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -116,6 +119,9 @@ export default function CheckInPage() {
     setLoading(true);
     setScanning(true);
     
+    // Wait for React to render the qr-reader element
+    await new Promise(resolve => setTimeout(resolve, 300));
+    
     try {
       const element = document.getElementById('qr-reader');
       if (!element) {
@@ -138,9 +144,9 @@ export default function CheckInPage() {
         { facingMode: 'environment' },
         config,
         async (decodedText) => {
-          if (html5QrCodeRef.current?.isScanning) {
-            await html5QrCodeRef.current.stop();
-            setScanning(false);
+          // Prevent processing multiple scans simultaneously
+          if (!isProcessingRef.current) {
+            isProcessingRef.current = true;
             await handleQRCodeScan(decodedText);
           }
         },
@@ -190,7 +196,9 @@ export default function CheckInPage() {
         setLastScan({ status: 'error', attendee: null, message: `Invalid QR Code: Attendee not found.` });
         await logScan(attendeeId, 'Unknown', 'not-found');
         toast({ variant: 'destructive', title: 'Not Found', description: 'Attendee not found in database.' });
-        setTimeout(() => startScanner(), 3000);
+        setTimeout(() => {
+          isProcessingRef.current = false;
+        }, 2000);
         return;
       }
 
@@ -201,7 +209,9 @@ export default function CheckInPage() {
         setLastScan({ status: 'duplicate', attendee, message: `Already checked in at ${new Date(attendee.checkInTime!).toLocaleString()}` });
         await logScan(attendeeDoc.id, attendee.name, 'already-checked-in');
         toast({ variant: 'default', title: 'Already Checked In', description: `${attendee.name} was already checked in.` });
-        setTimeout(() => startScanner(), 3000);
+        setTimeout(() => {
+          isProcessingRef.current = false;
+        }, 2000);
         return;
       }
 
@@ -211,7 +221,9 @@ export default function CheckInPage() {
     } catch (error: any) {
       console.error('Error processing QR code:', error);
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to process QR code.' });
-      setTimeout(() => startScanner(), 3000);
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 2000);
     }
   };
 
@@ -233,7 +245,11 @@ export default function CheckInPage() {
       toast({ title: 'Success', description: `${pendingAttendee.name} checked in successfully!` });
       setConfirmDialogOpen(false);
       setPendingAttendee(null);
-      setTimeout(() => startScanner(), 2000);
+      
+      // Allow next scan after a short delay
+      setTimeout(() => {
+        isProcessingRef.current = false;
+      }, 1000);
 
     } catch (error: any) {
       console.error('Error checking in attendee:', error);
@@ -244,7 +260,11 @@ export default function CheckInPage() {
   const cancelCheckIn = () => {
     setConfirmDialogOpen(false);
     setPendingAttendee(null);
-    setTimeout(() => startScanner(), 500);
+    
+    // Allow next scan immediately when cancelled
+    setTimeout(() => {
+      isProcessingRef.current = false;
+    }, 500);
   };
 
   const logScan = async (attendeeId: string, attendeeName: string, action: 'checked-in' | 'already-checked-in' | 'not-found') => {
@@ -323,7 +343,7 @@ export default function CheckInPage() {
                 </div>
                 <Button onClick={startScanner} size="lg" disabled={loading}>
                   <Camera className="h-5 w-5 mr-2" />
-                  {loading ? 'Starting...' : 'Start Scanner'}
+                  {loading ? 'Starting...' : 'Start Scanner'}'
                 </Button>
               </div>
             )}
@@ -379,7 +399,7 @@ export default function CheckInPage() {
                     <div>
                       <h3 className="text-lg font-semibold text-white">{lastScan.attendee?.name || 'Unknown Attendee'}</h3>
                       <p className={lastScan.status === 'error' ? 'text-red-300' : 'text-yellow-300'}>{lastScan.message}</p>
-                      {lastScan.attendee && <p className="text-sm text-red-400/80">{lastScan.attendee.organization} - {lastScan.attendee.role}</p>}
+                      {lastScan.attendee && <p className="text-sm text-red-400/80">{lastScan.attendee.organization} - {lastScan.attendee.role}</p>}'
                     </div>
                   </div>
                 </div>

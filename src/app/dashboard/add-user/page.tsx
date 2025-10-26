@@ -12,8 +12,9 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getAuth } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useToast } from '@/hooks/use-toast';
+import { cn } from '@/lib/utils';
 
 
 const AddUserPage = () => {
@@ -24,6 +25,7 @@ const AddUserPage = () => {
   const [role, setRole] = useState('');
   const [error, setError] = useState('');
   const router = useRouter();
+  const { toast } = useToast();
 
   const handleAddUser = async (e) => {
     e.preventDefault();
@@ -43,6 +45,10 @@ const AddUserPage = () => {
             });
 
             if (response.ok) {
+                toast({
+                  title: 'User Created',
+                  description: 'The new user has been successfully added.',
+                });
                 router.push('/dashboard');
             } else {
                 const data = await response.json();
@@ -50,7 +56,12 @@ const AddUserPage = () => {
             }
         }
     } catch (error) {
-      setError(error.message);
+      setError('An unexpected error occurred. Please try again.');
+      toast({
+        variant: 'destructive',
+        title: 'Error creating user',
+        description: error.message,
+      });
     }
   };
 
@@ -74,6 +85,7 @@ const AddUserPage = () => {
                 required
                 value={displayName}
                 onChange={(e) => setDisplayName(e.target.value)}
+                className={cn(error && 'border-destructive')}
               />
             </div>
             <div className="grid gap-2">
@@ -85,6 +97,7 @@ const AddUserPage = () => {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className={cn(error && 'border-destructive')}
               />
             </div>
             <div className="grid gap-2">
@@ -95,6 +108,7 @@ const AddUserPage = () => {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className={cn(error && 'border-destructive')}
               />
             </div>
             <div className="grid gap-2">
@@ -106,6 +120,7 @@ const AddUserPage = () => {
                 required
                 value={organization}
                 onChange={(e) => setOrganization(e.target.value)}
+                className={cn(error && 'border-destructive')}
               />
             </div>
             <div className="grid gap-2">
@@ -117,9 +132,10 @@ const AddUserPage = () => {
                 required
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
+                className={cn(error && 'border-destructive')}
               />
             </div>
-            {error && <p className="text-red-500 text-sm">{error}</p>}
+            {error && <p className="text-sm font-medium text-destructive">{error}</p>}
             <Button type="submit" className="w-full">
               Add User
             </Button>

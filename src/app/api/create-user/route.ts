@@ -1,18 +1,24 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, cert } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { FirestorePermissionError } from '@/firebase/errors';
+import { errorEmitter } from '@/firebase/error-emitter';
 
-// IMPORTANT: Replace with the actual path to your service account key file
-const serviceAccount = require('../../../../serviceAccountKey.json');
+let adminApp;
+if (!getApps().some(app => app.name === 'admin')) {
+    const serviceAccount = require('../../../../serviceAccountKey.json');
+    adminApp = initializeApp({
+        credential: cert(serviceAccount)
+    }, 'admin');
+} else {
+    adminApp = getApp('admin');
+}
 
-const app = initializeApp({ 
-    credential: cert(serviceAccount)
-}, 'admin');
 
-const auth = getAuth(app);
-const db = getFirestore(app);
+const auth = getAuth(adminApp);
+const db = getFirestore(adminApp);
 
 export async function POST(req: NextRequest) {
     try {
@@ -28,7 +34,9 @@ export async function POST(req: NextRequest) {
         // Verify the token
         const decodedToken = await auth.verifyIdToken(idToken);
         const uid = decodedToken.uid;
-        const userDoc = await db.collection('users').doc(uid).get();
+        const userDocRef = db.collection('users').doc(uid);
+        const userDoc = await userDocRef.get();
+
 
         if (!userDoc.exists || userDoc.data()?.role !== 'admin') {
             return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
@@ -36,7 +44,9 @@ export async function POST(req: NextRequest) {
 
 
         const userRecord = await auth.createUser({ email, password, displayName });
-        await db.collection('users').doc(userRecord.uid).set({
+        const newUserDocRef = db.collection('users').doc(userRecord.uid);
+        
+        await newUserDocRef.set({
             displayName,
             email,
             organization,
@@ -45,8 +55,18 @@ export async function POST(req: NextRequest) {
         });
 
         return NextResponse.json({ message: 'User created successfully' });
-    } catch (error) {
+    } catch (error: any) {
         console.error('Error creating user:', error);
+
+        if (error.code?.includes('permission-denied')) {
+             const permissionError = new FirestorePermissionError({
+                path: 'users',
+                operation: 'create',
+                requestResourceData: error.requestData,
+              });
+              errorEmitter.emit('permission-error', permissionError);
+        }
+
         return NextResponse.json({ error: 'Error creating user' }, { status: 500 });
     }
 }

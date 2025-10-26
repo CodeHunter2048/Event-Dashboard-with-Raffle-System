@@ -7,6 +7,8 @@ import { auth, isFirebaseReady } from '@/lib/firebase';
 import { SidebarProvider, Sidebar, SidebarInset } from '@/components/ui/sidebar';
 import { DashboardHeader } from '@/components/dashboard-header';
 import { SidebarNav } from '@/components/sidebar-nav';
+import { FirebaseErrorListener } from '@/components/FirebaseErrorListener';
+
 
 export default function DashboardLayout({
   children,
@@ -77,6 +79,7 @@ export default function DashboardLayout({
   // Authenticated state - show dashboard
   return (
     <SidebarProvider>
+      <FirebaseErrorListener />
       <Sidebar>
         <SidebarNav />
       </Sidebar>

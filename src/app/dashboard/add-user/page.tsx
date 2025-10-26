@@ -12,7 +12,8 @@ import {
 } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { getAuth } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 
 const AddUserPage = () => {
@@ -29,7 +30,6 @@ const AddUserPage = () => {
     setError('');
 
     try {
-        const auth = getAuth();
         const user = auth.currentUser;
         if (user) {
             const idToken = await user.getIdToken();

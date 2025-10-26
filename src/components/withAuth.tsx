@@ -9,12 +9,14 @@ const withAuth = (WrappedComponent) => {
   const Wrapper = (props) => {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
+    const [user, setUser] = useState(null);
 
     useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, (user) => {
         if (!user) {
           router.push('/login');
         } else {
+          setUser(user);
           setLoading(false);
         }
       });
@@ -23,10 +25,10 @@ const withAuth = (WrappedComponent) => {
     }, [router]);
 
     if (loading) {
-      return <div>Loading...</div>; // Or a spinner component
+      return <div className="flex justify-center items-center h-screen">Loading...</div>; // Or a spinner component
     }
 
-    return <WrappedComponent {...props} />;
+    return <WrappedComponent {...props} user={user} />;
   };
 
   return Wrapper;

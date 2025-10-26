@@ -33,6 +33,7 @@ import {
 import { db } from '@/lib/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import withAuth from '@/components/withAuth';
+import { attendees as staticAttendees } from '@/lib/data';
 
 function Dashboard() {
   const [attendees, setAttendees] = useState([]);
@@ -40,8 +41,8 @@ function Dashboard() {
 
   useEffect(() => {
     const fetchAttendees = async () => {
-      const attendeesCollection = await getDocs(collection(db, 'attendees'));
-      const attendeesData = attendeesCollection.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      // Using static data for now as firestore is not populated
+      const attendeesData = staticAttendees;
       setAttendees(attendeesData);
       setCheckedInAttendees(attendeesData.filter(a => a.checkedIn));
     };

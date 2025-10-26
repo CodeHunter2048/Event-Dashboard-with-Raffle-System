@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/sidebar';
 import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { db, auth as clientAuth } from '@/lib/firebase';
 import { useEffect, useState } from 'react';
 
 const navItems = [
@@ -42,19 +42,22 @@ const adminNavItem = { href: '/dashboard/add-user', icon: UserPlus, label: 'Add 
 export function SidebarNav() {
   const pathname = usePathname();
   const [isAdmin, setIsAdmin] = useState(false);
-  const auth = getAuth();
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    const unsubscribe = onAuthStateChanged(clientAuth, async (user) => {
       if (user) {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists() && userDoc.data().role === 'admin') {
           setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
         }
+      } else {
+        setIsAdmin(false);
       }
     });
     return () => unsubscribe();
-  }, [auth]);
+  }, []);
 
   return (
     <SidebarContent>

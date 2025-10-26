@@ -5,11 +5,11 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 
 // IMPORTANT: Replace with the actual path to your service account key file
-const serviceAccount = require('../../../../../serviceAccountKey.json');
+const serviceAccount = require('../../../../serviceAccountKey.json');
 
 const app = initializeApp({ 
     credential: cert(serviceAccount)
-});
+}, 'admin');
 
 const auth = getAuth(app);
 const db = getFirestore(app);

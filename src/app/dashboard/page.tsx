@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import {
@@ -7,6 +10,7 @@ import {
   Gift,
   CheckCircle,
 } from 'lucide-react';
+import { collection, getDocs } from 'firebase/firestore';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -26,13 +30,27 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { attendees } from '@/lib/data';
+import { db } from '@/lib/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import withAuth from '@/components/withAuth';
 
-const checkedInAttendees = attendees.filter((a) => a.checkedIn);
-const recentCheckins = checkedInAttendees.slice(0, 5);
+function Dashboard() {
+  const [attendees, setAttendees] = useState([]);
+  const [checkedInAttendees, setCheckedInAttendees] = useState([]);
 
-export default function Dashboard() {
+  useEffect(() => {
+    const fetchAttendees = async () => {
+      const attendeesCollection = await getDocs(collection(db, 'attendees'));
+      const attendeesData = attendeesCollection.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setAttendees(attendeesData);
+      setCheckedInAttendees(attendeesData.filter(a => a.checkedIn));
+    };
+
+    fetchAttendees();
+  }, []);
+
+  const recentCheckins = checkedInAttendees.slice(0, 5);
+
   return (
     <>
       <div className="grid gap-4 md:grid-cols-2 md:gap-8 lg:grid-cols-4">
@@ -60,7 +78,7 @@ export default function Dashboard() {
           <CardContent>
             <div className="text-2xl font-bold">{checkedInAttendees.length}</div>
             <p className="text-xs text-muted-foreground">
-              {`+${((checkedInAttendees.length / attendees.length) * 100).toFixed(0)}% of total`}
+              {`+${attendees.length > 0 ? ((checkedInAttendees.length / attendees.length) * 100).toFixed(0) : 0}% of total`}
             </p>
           </CardContent>
         </Card>
@@ -179,3 +197,5 @@ export default function Dashboard() {
     </>
   );
 }
+
+export default withAuth(Dashboard);

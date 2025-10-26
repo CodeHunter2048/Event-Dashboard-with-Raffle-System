@@ -11,6 +11,7 @@ import {
   Shield,
   Tv,
   Package2,
+  UserPlus,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -20,6 +21,10 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { useEffect, useState } from 'react';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -32,8 +37,24 @@ const navItems = [
   { href: '/display', icon: Tv, label: 'Public Display' },
 ];
 
+const adminNavItem = { href: '/dashboard/add-user', icon: UserPlus, label: 'Add User' };
+
 export function SidebarNav() {
   const pathname = usePathname();
+  const [isAdmin, setIsAdmin] = useState(false);
+  const auth = getAuth();
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists() && userDoc.data().role === 'admin') {
+          setIsAdmin(true);
+        }
+      }
+    });
+    return () => unsubscribe();
+  }, [auth]);
 
   return (
     <SidebarContent>
@@ -63,6 +84,20 @@ export function SidebarNav() {
               </SidebarMenuButton>
             </SidebarMenuItem>
           ))}
+          {isAdmin && (
+            <SidebarMenuItem key={adminNavItem.href}>
+              <SidebarMenuButton
+                asChild
+                isActive={pathname.startsWith(adminNavItem.href)}
+                className="justify-start"
+              >
+                <Link href={adminNavItem.href}>
+                  <adminNavItem.icon className="h-4 w-4" />
+                  {adminNavItem.label}
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          )}
         </SidebarMenu>
       </nav>
     </SidebarContent>

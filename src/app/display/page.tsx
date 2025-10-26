@@ -1,8 +1,12 @@
+
 'use client';
-import { attendees } from '@/lib/data';
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { Attendee } from '@/lib/data';
 
 // CSS for the scrolling animation
 const styles = `
@@ -16,7 +20,51 @@ const styles = `
 `;
 
 export default function DisplayPage() {
-  const checkedInAttendees = attendees.filter(a => a.checkedIn);
+  const [totalAttendees, setTotalAttendees] = useState(0);
+  const [checkedInAttendees, setCheckedInAttendees] = useState<Attendee[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!db) return;
+
+    // Get total number of attendees
+    const allAttendeesQuery = query(collection(db, 'attendees'));
+    const unsubscribeTotal = onSnapshot(allAttendeesQuery, (snapshot) => {
+      setTotalAttendees(snapshot.size);
+    });
+
+    // Get real-time updates for checked-in attendees
+    const checkedInQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
+    const unsubscribeCheckedIn = onSnapshot(checkedInQuery, (snapshot) => {
+      const attendeesData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          email: data.email || '',
+          organization: data.organization || '',
+          role: data.role || '',
+          avatar: data.avatar || 1,
+          checkedIn: data.checkedIn || false,
+          checkInTime: data.checkInTime || null,
+        } as Attendee;
+      });
+      setCheckedInAttendees(attendeesData);
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching checked-in attendees:", error);
+      setLoading(false);
+    });
+
+    // Clean up listeners on unmount
+    return () => {
+      unsubscribeTotal();
+      unsubscribeCheckedIn();
+    };
+  }, []);
+
+  const displayedAttendees = checkedInAttendees.length > 0 ? [...checkedInAttendees, ...checkedInAttendees] : [];
+
   return (
     <>
       <style>{styles}</style>
@@ -37,7 +85,7 @@ export default function DisplayPage() {
           <main className="lg:col-span-2 h-[60vh] overflow-hidden relative">
             <div className="absolute top-0 left-0 w-full h-16 bg-gradient-to-b from-slate-900/100 to-transparent z-10" />
              <div className="scrolling-list">
-              {[...checkedInAttendees, ...checkedInAttendees].map((attendee, index) => {
+              {displayedAttendees.map((attendee, index) => {
                  const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                  return (
                   <Card key={`${attendee.id}-${index}`} className="mb-4 bg-slate-800/50 backdrop-blur-sm border-slate-700">
@@ -55,6 +103,11 @@ export default function DisplayPage() {
                  )
               })}
              </div>
+             {loading && (
+                <div className="absolute inset-0 flex items-center justify-center text-white">
+                  <p>Loading attendees...</p>
+                </div>
+              )}
              <div className="absolute bottom-0 left-0 w-full h-16 bg-gradient-to-t from-slate-900/100 to-transparent z-10" />
           </main>
 
@@ -66,7 +119,7 @@ export default function DisplayPage() {
                 <CardContent>
                     <p className="text-7xl lg:text-8xl font-bold text-white">
                         {checkedInAttendees.length}
-                        <span className="text-4xl text-slate-400">/ {attendees.length}</span>
+                        <span className="text-4xl text-slate-400">/ {totalAttendees}</span>
                     </p>
                 </CardContent>
              </Card>

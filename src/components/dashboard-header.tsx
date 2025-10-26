@@ -15,8 +15,9 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { signOut } from 'firebase/auth';
+import { signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
+import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -53,6 +54,14 @@ const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
 export function DashboardHeader() {
   const router = useRouter();
   const { toast } = useToast();
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+    });
+    return () => unsubscribe();
+  }, []);
 
   const handleLogout = async () => {
     try {
@@ -62,7 +71,7 @@ export function DashboardHeader() {
         description: 'You have been successfully logged out.',
       });
       router.push('/login');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error signing out:', error);
       toast({
         variant: 'destructive',
@@ -107,10 +116,10 @@ export function DashboardHeader() {
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="secondary" size="icon" className="rounded-full">
-            {userAvatar && (
+          <div className="flex items-center gap-2 cursor-pointer">
+             {userAvatar && (
               <Image
-                src={userAvatar.imageUrl}
+                src={user?.photoURL || userAvatar.imageUrl}
                 width={36}
                 height={36}
                 alt="User avatar"
@@ -118,8 +127,8 @@ export function DashboardHeader() {
                 data-ai-hint={userAvatar.imageHint}
               />
             )}
-            <span className="sr-only">Toggle user menu</span>
-          </Button>
+            {user && <span className="hidden md:inline-block text-sm font-medium">{user.displayName}</span>}
+          </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>My Account</DropdownMenuLabel>

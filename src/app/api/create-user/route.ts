@@ -1,12 +1,12 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, cert, getApps, getApp } from 'firebase-admin/app';
+import { initializeApp, cert, getApps, getApp, App } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { FirestorePermissionError } from '@/firebase/errors';
 import { errorEmitter } from '@/firebase/error-emitter';
 
-let adminApp;
+let adminApp: App;
 if (!getApps().some(app => app.name === 'admin')) {
     const serviceAccount = require('../../../../serviceAccountKey.json');
     adminApp = initializeApp({
@@ -57,15 +57,6 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ message: 'User created successfully' });
     } catch (error: any) {
         console.error('Error creating user:', error);
-
-        if (error.code?.includes('permission-denied')) {
-             const permissionError = new FirestorePermissionError({
-                path: 'users',
-                operation: 'create',
-                requestResourceData: error.requestData,
-              });
-              errorEmitter.emit('permission-error', permissionError);
-        }
 
         return NextResponse.json({ error: 'Error creating user' }, { status: 500 });
     }

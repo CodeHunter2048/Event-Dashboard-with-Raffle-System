@@ -11,22 +11,16 @@ import {
   Shield,
   Tv,
   Package2,
-  UserPlus,
+  UserCog,
 } from 'lucide-react';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
 import {
   SidebarContent,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
-import { getAuth, onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
-import { db, auth as clientAuth } from '@/lib/firebase';
-import { useEffect, useState } from 'react';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
+import { useAuth } from '@/hooks/use-auth';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -39,37 +33,9 @@ const navItems = [
   { href: '/display', icon: Tv, label: 'Public Display' },
 ];
 
-const adminNavItem = { href: '/dashboard/add-user', icon: UserPlus, label: 'Add User' };
-
 export function SidebarNav() {
   const pathname = usePathname();
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  useEffect(() => {
-    if (!clientAuth) return;
-    const unsubscribe = onAuthStateChanged(clientAuth, async (user) => {
-      if (user) {
-        const userDocRef = doc(db, 'users', user.uid);
-        try {
-          const userDoc = await getDoc(userDocRef);
-           if (userDoc.exists() && userDoc.data().role === 'admin') {
-            setIsAdmin(true);
-          } else {
-            setIsAdmin(false);
-          }
-        } catch(serverError) {
-            const permissionError = new FirestorePermissionError({
-              path: userDocRef.path,
-              operation: 'get',
-            });
-            errorEmitter.emit('permission-error', permissionError);
-        }
-      } else {
-        setIsAdmin(false);
-      }
-    });
-    return () => unsubscribe();
-  }, []);
+  const { isAdmin } = useAuth();
 
   return (
     <SidebarContent>
@@ -100,15 +66,15 @@ export function SidebarNav() {
             </SidebarMenuItem>
           ))}
           {isAdmin && (
-            <SidebarMenuItem key={adminNavItem.href}>
+            <SidebarMenuItem key="/dashboard/manage-accounts">
               <SidebarMenuButton
                 asChild
-                isActive={pathname.startsWith(adminNavItem.href)}
+                isActive={pathname.startsWith('/dashboard/manage-accounts')}
                 className="justify-start"
               >
-                <Link href={adminNavItem.href}>
-                  <adminNavItem.icon className="h-4 w-4" />
-                  {adminNavItem.label}
+                <Link href="/dashboard/manage-accounts">
+                  <UserCog className="h-4 w-4" />
+                  Manage Accounts
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

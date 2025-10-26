@@ -9,7 +9,34 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      return get(/databases/$(database)/documents/accounts/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    function isOrganizer() {
+      let role = get(/databases/$(database)/documents/accounts/$(request.auth.uid)).data.role;
+      return role == 'organizer' || role == 'admin';
+    }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    match /accounts/{accountId} {
+      // Allow users to read their own document
+      // Admins can read any account document
+      allow read: if isOwner(accountId) || isAdmin();
+      // Allow admins to create, update, or delete account documents
+      allow write: if isAdmin();
+    }
+
+    match /attendees/{attendeeId} {
+      // Organizers and admins can read all attendees
+      allow read: if isAuthenticated();
+      // Organizers and admins can create, update attendees
+      allow create: if isOrganizer();
+      allow update: if isOrganizer();
+      // Only admins can delete attendees
+      allow delete: if isAdmin();
     }
 
     match /users/{userId} {
@@ -21,3 +48,4 @@ service cloud.firestore {
     }
   }
 }
+

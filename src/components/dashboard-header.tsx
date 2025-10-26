@@ -15,11 +15,11 @@ import {
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { signOut, onAuthStateChanged, User } from 'firebase/auth';
+import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebase';
-import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import {
   Card,
   CardContent,
@@ -47,6 +47,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { SidebarNav } from './sidebar-nav';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/use-auth';
 
 
 const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
@@ -54,16 +55,11 @@ const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
 export function DashboardHeader() {
   const router = useRouter();
   const { toast } = useToast();
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-    });
-    return () => unsubscribe();
-  }, []);
+  const { user, userAccount, loading } = useAuth();
 
   const handleLogout = async () => {
+    if (!auth) return;
+    
     try {
       await signOut(auth);
       toast({
@@ -78,6 +74,17 @@ export function DashboardHeader() {
         title: 'Logout Failed',
         description: 'An error occurred while logging out. Please try again.',
       });
+    }
+  };
+
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'default';
+      case 'organizer':
+        return 'secondary';
+      default:
+        return 'outline';
     }
   };
 
@@ -127,11 +134,26 @@ export function DashboardHeader() {
                 data-ai-hint={userAvatar.imageHint}
               />
             )}
-            {user && <span className="hidden md:inline-block text-sm font-medium">{user.displayName}</span>}
+            <div className="hidden md:flex flex-col items-start">
+              <span className="text-sm font-medium">{userAccount?.displayName || user?.displayName || 'User'}</span>
+              {userAccount?.role && (
+                <Badge variant={getRoleBadgeVariant(userAccount.role)} className="text-xs capitalize">
+                  {userAccount.role}
+                </Badge>
+              )}
+            </div>
           </div>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuLabel>My Account</DropdownMenuLabel>
+          <DropdownMenuLabel>
+            <div className="flex flex-col space-y-1">
+              <p className="text-sm font-medium">{userAccount?.displayName || 'My Account'}</p>
+              <p className="text-xs text-muted-foreground">{userAccount?.email}</p>
+              {userAccount?.organization && (
+                <p className="text-xs text-muted-foreground">{userAccount.organization}</p>
+              )}
+            </div>
+          </DropdownMenuLabel>
           <DropdownMenuSeparator />
           <DropdownMenuItem>Settings</DropdownMenuItem>
           <DropdownMenuItem>Support</DropdownMenuItem>

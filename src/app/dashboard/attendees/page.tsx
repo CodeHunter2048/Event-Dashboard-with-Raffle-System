@@ -1,6 +1,7 @@
 'use client';
 
-import { File, PlusCircle, Upload, Ticket, Printer } from 'lucide-react';
+import { useEffect, useState, useRef } from 'react';
+import { File, PlusCircle, Upload, Ticket, Printer, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -24,70 +25,520 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
-import { attendees, Attendee } from '@/lib/data';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Attendee } from '@/lib/data';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { 
+  collection, 
+  addDoc, 
+  onSnapshot, 
+  query, 
+  orderBy,
+  serverTimestamp,
+  getDocs,
+  where,
+  deleteDoc,
+  doc
+} from 'firebase/firestore';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
+import Papa from 'papaparse';
+import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
+interface ImportedAttendee {
+  name: string;
+  organization: string;
+  role: string;
+  email?: string;
+}
+
 export default function AttendeesPage() {
+  const { toast } = useToast();
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [importDialogOpen, setImportDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [selectedAttendees, setSelectedAttendees] = useState<Set<string>>(new Set());
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [formData, setFormData] = useState({
+    name: '',
+    organization: '',
+    role: '',
+  });
+
+  // Real-time listener for attendees
+  useEffect(() => {
+    if (!db) return;
+
+    const attendeesRef = collection(db, 'attendees');
+    const q = query(attendeesRef, orderBy('createdAt', 'desc'));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const attendeesData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          email: data.email || '',
+          organization: data.organization || '',
+          role: data.role || '',
+          avatar: data.avatar || 1,
+          checkedIn: data.checkedIn || false,
+          checkInTime: data.checkInTime || null,
+          createdAt: data.createdAt,
+        } as Attendee;
+      });
+      setAttendees(attendeesData);
+      setLoading(false);
+    }, (error) => {
+      console.error('Error fetching attendees:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to fetch attendees.',
+      });
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [toast]);
+
+  // Check if attendee name already exists (case-insensitive)
+  const isDuplicateName = (name: string): boolean => {
+    const normalizedName = name.trim().toLowerCase();
+    return attendees.some(attendee => 
+      attendee.name.trim().toLowerCase() === normalizedName
+    );
+  };
+
+  const handleAddAttendee = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!db) return;
+
+    // Check for duplicate
+    if (isDuplicateName(formData.name)) {
+      toast({
+        variant: 'destructive',
+        title: 'Duplicate Entry',
+        description: `An attendee named "${formData.name}" already exists.`,
+      });
+      return;
+    }
+
+    try {
+      await addDoc(collection(db, 'attendees'), {
+        name: formData.name.trim(),
+        email: '', // Can be added later if needed
+        organization: formData.organization.trim(),
+        role: formData.role.trim(),
+        avatar: Math.floor(Math.random() * 10) + 1, // Random avatar
+        checkedIn: false,
+        checkInTime: null,
+        createdAt: serverTimestamp(),
+      });
+
+      toast({
+        title: 'Success',
+        description: 'Attendee added successfully.',
+      });
+
+      setDialogOpen(false);
+      setFormData({
+        name: '',
+        organization: '',
+        role: '',
+      });
+    } catch (error: any) {
+      console.error('Error adding attendee:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to add attendee.',
+      });
+    }
+  };
+
+  const handleFileImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+
+    if (fileExtension === 'csv') {
+      // Parse CSV
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+          processImportedData(results.data as ImportedAttendee[]);
+        },
+        error: (error) => {
+          toast({
+            variant: 'destructive',
+            title: 'CSV Parse Error',
+            description: error.message,
+          });
+        },
+      });
+    } else if (fileExtension === 'xlsx' || fileExtension === 'xls') {
+      // Parse XLSX
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const data = event.target?.result;
+          const workbook = XLSX.read(data, { type: 'binary' });
+          const sheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[sheetName];
+          const jsonData = XLSX.utils.sheet_to_json(worksheet) as ImportedAttendee[];
+          processImportedData(jsonData);
+        } catch (error: any) {
+          toast({
+            variant: 'destructive',
+            title: 'Excel Parse Error',
+            description: error.message,
+          });
+        }
+      };
+      reader.readAsBinaryString(file);
+    } else {
+      toast({
+        variant: 'destructive',
+        title: 'Invalid File Type',
+        description: 'Please upload a CSV or XLSX file.',
+      });
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const processImportedData = async (data: ImportedAttendee[]) => {
+    if (!db) return;
+
+    setImporting(true);
+    let successCount = 0;
+    let duplicateCount = 0;
+    let errorCount = 0;
+
+    try {
+      for (const row of data) {
+        // Validate required fields
+        if (!row.name || !row.organization || !row.role) {
+          errorCount++;
+          continue;
+        }
+
+        // Check for duplicates
+        if (isDuplicateName(row.name)) {
+          duplicateCount++;
+          continue;
+        }
+
+        // Add to Firestore
+        try {
+          await addDoc(collection(db, 'attendees'), {
+            name: row.name.trim(),
+            email: row.email?.trim() || '',
+            organization: row.organization.trim(),
+            role: row.role.trim(),
+            avatar: Math.floor(Math.random() * 10) + 1,
+            checkedIn: false,
+            checkInTime: null,
+            createdAt: serverTimestamp(),
+          });
+          successCount++;
+        } catch (error) {
+          errorCount++;
+        }
+      }
+
+      // Show summary toast
+      const messages = [];
+      if (successCount > 0) messages.push(`${successCount} added`);
+      if (duplicateCount > 0) messages.push(`${duplicateCount} duplicates skipped`);
+      if (errorCount > 0) messages.push(`${errorCount} errors`);
+
+      toast({
+        title: successCount > 0 ? 'Import Complete' : 'Import Failed',
+        description: messages.join(', '),
+        variant: successCount > 0 ? 'default' : 'destructive',
+      });
+
+      setImportDialogOpen(false);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Import Error',
+        description: error.message || 'Failed to import attendees.',
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const template = [
+      { name: 'John Doe', organization: 'Acme Corp', role: 'Software Engineer', email: 'john@example.com' },
+      { name: 'Jane Smith', organization: 'Tech Inc', role: 'Product Manager', email: 'jane@example.com' },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(template);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Attendees');
+    XLSX.writeFile(workbook, 'attendees_template.xlsx');
+  };
+
+  const toggleSelectAttendee = (attendeeId: string) => {
+    const newSelected = new Set(selectedAttendees);
+    if (newSelected.has(attendeeId)) {
+      newSelected.delete(attendeeId);
+    } else {
+      newSelected.add(attendeeId);
+    }
+    setSelectedAttendees(newSelected);
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedAttendees.size === attendees.length) {
+      setSelectedAttendees(new Set());
+    } else {
+      setSelectedAttendees(new Set(attendees.map(a => a.id)));
+    }
+  };
+
+  const handleDeleteSelected = async () => {
+    if (!db || selectedAttendees.size === 0) return;
+
+    setDeleting(true);
+    try {
+      // Delete each attendee
+      const deletePromises = Array.from(selectedAttendees).map((attendeeId) => {
+        const attendeeRef = doc(db!, 'attendees', attendeeId);
+        return deleteDoc(attendeeRef);
+      });
+
+      await Promise.all(deletePromises);
+
+      toast({
+        title: 'Success',
+        description: `${selectedAttendees.size} attendee(s) deleted successfully.`,
+      });
+
+      setSelectedAttendees(new Set());
+      setDeleteDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error deleting attendees:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to delete attendees.',
+      });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const generateTicket = async (attendee: Attendee) => {
     const doc = new jsPDF({
       orientation: 'landscape',
-      unit: 'px',
-      format: [450, 150]
+      unit: 'mm',
+      format: [210, 80] // Wider and shorter for paper conservation
     });
     
-    // Generate QR Code
-    const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-      width: 80,
-      margin: 2,
-      color: {
-        dark: '#000000', // Black QR code
-        light: '#FFFFFF'  // White background for QR code
+    // Generate QR Code with validation
+    let qrCodeDataURL = '';
+    try {
+      qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+        width: 200,
+        margin: 1,
+        color: {
+          dark: '#2B5F6F', // Deep Teal Blue
+          light: '#FFFFFF'
+        }
+      });
+      
+      // Validate QR code data URL
+      if (!qrCodeDataURL || !qrCodeDataURL.startsWith('data:image/')) {
+        throw new Error('Invalid QR code data URL');
       }
-    });
+    } catch (error) {
+      console.error('Failed to generate QR code:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to generate QR code for ticket.',
+      });
+      return;
+    }
 
-    // Add custom font (Inter) - jsPDF supports limited fonts, so we use a standard one
-    doc.setFont('helvetica', 'sans-serif');
-    
-    // Background Gradient
-    const gradient = doc.context2d.createLinearGradient(0, 0, 450, 150);
-    gradient.addColorStop(0, '#1E293B');
-    gradient.addColorStop(1, '#0f172a');
-    doc.context2d.fillStyle = gradient;
-    doc.rect(0, 0, 450, 150);
-    doc.fill();
+    // Load logo image with proper validation
+    // In Next.js, we need to use the correct path for images in src/app
+    const logoUrl = '/logo.png'; // This will look in the public folder
+    let logoDataURL = '';
+    try {
+      const response = await fetch(logoUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch logo');
+      }
+      const blob = await response.blob();
+      
+      // Validate it's a valid image blob
+      if (!blob.type.startsWith('image/')) {
+        throw new Error('Invalid image type');
+      }
+      
+      logoDataURL = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          // Validate the data URL format
+          if (result && result.startsWith('data:image/')) {
+            resolve(result);
+          } else {
+            reject(new Error('Invalid data URL format'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn('Logo could not be loaded, continuing without it:', error);
+      logoDataURL = ''; // Ensure it's empty on error
+    }
 
-    // Accent line
-    doc.setFillColor('#3B82F6');
-    doc.rect(0, 0, 5, 150);
-    doc.fill();
+    // Cream/Beige Background
+    doc.setFillColor('#F5F1E3');
+    doc.rect(0, 0, 210, 80, 'F');
+
+    // Deep Teal Blue accent bar on left
+    doc.setFillColor('#2B5F6F');
+    doc.rect(0, 0, 8, 80, 'F');
+
+    // Warm Orange decorative line
+    doc.setFillColor('#D4833C');
+    doc.rect(8, 0, 2, 80, 'F');
+
+    // Logo (if loaded) - add with error handling
+    if (logoDataURL) {
+      try {
+        doc.addImage(logoDataURL, 'PNG', 15, 12, 25, 25);
+      } catch (error) {
+        console.error('Failed to add logo to ticket:', error);
+        // Continue without logo
+      }
+    }
+
+    // Event Branding Section (shifted right if logo present)
+    const textStartX = logoDataURL ? 45 : 15;
     
-    // Attendee Info
-    doc.setTextColor('#FFFFFF');
-    doc.setFontSize(10);
-    doc.text(`ID: ${attendee.id}`, 20, 30);
-    
-    doc.setFontSize(24);
     doc.setFont('helvetica', 'bold');
-    doc.text(attendee.name, 20, 70);
+    doc.setFontSize(18);
+    doc.setTextColor('#2B5F6F'); // Deep Teal Blue
+    doc.text('AI', textStartX, 20);
+    
+    doc.setFontSize(14);
+    doc.setTextColor('#D4833C'); // Warm Orange
+    doc.text('FOR', textStartX + 15, 20);
+    
+    doc.setFontSize(18);
+    doc.setTextColor('#A4464B'); // Burgundy Red
+    doc.text('IA', textStartX + 30, 20);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor('#D4833C'); // Warm Orange
+    doc.text('UNITING', textStartX, 28);
+    
+    doc.setFontSize(10);
+    doc.setTextColor('#A4464B'); // Burgundy Red
+    doc.text('INDUSTRY-ACADEMIA', textStartX, 34);
+    
+    doc.setFontSize(9);
+    doc.setTextColor('#D4833C'); // Warm Orange
+    doc.text('THROUGH', textStartX, 40);
+    
+    doc.setFontSize(11);
+    doc.setTextColor('#2B5F6F'); // Deep Teal Blue
+    doc.setFont('helvetica', 'bold');
+    doc.text('ARTIFICIAL INTELLIGENCE', textStartX, 46);
+
+    // Decorative line separator
+    doc.setDrawColor('#D4833C');
+    doc.setLineWidth(0.5);
+    doc.line(15, 52, 95, 52);
+
+    // Attendee Info Section
+    doc.setFontSize(7);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#666666');
+    doc.text(`ID: ${attendee.id.substring(0, 12)}...`, 15, 58);
 
     doc.setFontSize(16);
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor('#94A3B8');
-    doc.text(attendee.organization, 20, 95);
-    
-    // QR Code
-    doc.addImage(qrCodeDataURL, 'PNG', 340, 35, 80, 80);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor('#2B5F6F'); // Deep Teal Blue
+    doc.text(attendee.name, 15, 66, { maxWidth: 80 });
 
-    // Event Title
     doc.setFontSize(10);
-    doc.setTextColor('#3B82F6');
-    doc.text('AI for IA Conference', 345, 130);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor('#A4464B'); // Burgundy Red
+    doc.text(attendee.organization, 15, 72, { maxWidth: 80 });
 
-    doc.save(`ticket-${attendee.id}.pdf`);
+    // QR Code Section (Right Side) - add with error handling
+    try {
+      doc.addImage(qrCodeDataURL, 'PNG', 155, 15, 45, 45);
+      
+      doc.setFontSize(7);
+      doc.setTextColor('#666666');
+      doc.setFont('helvetica', 'normal');
+      const qrText = 'Scan for Check-in';
+      const qrTextWidth = doc.getTextWidth(qrText);
+      doc.text(qrText, 177.5 - (qrTextWidth / 2), 65);
+    } catch (error) {
+      console.error('Failed to add QR code to ticket:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Failed to add QR code to ticket.',
+      });
+      return;
+    }
+
+    // Burgundy decorative corner
+    doc.setFillColor('#A4464B');
+    doc.triangle(210, 0, 210, 8, 202, 0, 'F');
+    doc.triangle(0, 80, 8, 80, 0, 72, 'F');
+
+    doc.save(`ticket-${attendee.name.replace(/\s+/g, '-')}.pdf`);
   };
 
   const generateAllTickets = async () => {
@@ -97,87 +548,342 @@ export default function AttendeesPage() {
       format: 'a4'
     });
 
+    // Load logo image once with proper validation
+    // In Next.js, we need to use the correct path for images in src/app
+    const logoUrl = '/logo.png'; // This will look in the public folder
+    let logoDataURL = '';
+    try {
+      const response = await fetch(logoUrl);
+      if (!response.ok) {
+        throw new Error('Failed to fetch logo');
+      }
+      const blob = await response.blob();
+      
+      // Validate it's a valid image blob
+      if (!blob.type.startsWith('image/')) {
+        throw new Error('Invalid image type');
+      }
+      
+      logoDataURL = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => {
+          const result = reader.result as string;
+          // Validate the data URL format
+          if (result && result.startsWith('data:image/')) {
+            resolve(result);
+          } else {
+            reject(new Error('Invalid data URL format'));
+          }
+        };
+        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.readAsDataURL(blob);
+      });
+    } catch (error) {
+      console.warn('Logo could not be loaded, continuing without it:', error);
+      logoDataURL = ''; // Ensure it's empty on error
+    }
+
     const ticketWidth = 190;
-    const ticketHeight = 55;
+    const ticketHeight = 70; // Reduced height for paper conservation
     const pageMargin = 10;
     const pageHeight = doc.internal.pageSize.getHeight();
+    const ticketSpacing = 5;
     let y = pageMargin;
+    let isFirstTicket = true;
 
     for (let i = 0; i < attendees.length; i++) {
       const attendee = attendees[i];
-      if (y + ticketHeight > pageHeight - pageMargin) {
+      
+      if (!isFirstTicket && y + ticketHeight > pageHeight - pageMargin) {
         doc.addPage();
         y = pageMargin;
       }
+      isFirstTicket = false;
 
-      const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-        width: 120,
-        margin: 1,
-        color: {
-            dark: '#000000',
+      // Generate QR code with validation
+      let qrCodeDataURL = '';
+      try {
+        qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+          width: 180,
+          margin: 1,
+          color: {
+            dark: '#2B5F6F',
             light: '#FFFFFF'
+          }
+        });
+        
+        // Validate QR code data URL
+        if (!qrCodeDataURL || !qrCodeDataURL.startsWith('data:image/')) {
+          throw new Error('Invalid QR code data URL');
         }
-      });
+      } catch (error) {
+        console.error(`Failed to generate QR code for attendee ${attendee.name}:`, error);
+        // Continue without QR code for this attendee
+        qrCodeDataURL = '';
+      }
       
-      // Background Gradient
-      const gradient = doc.context2d.createLinearGradient(pageMargin, y, ticketWidth + pageMargin, y + ticketHeight);
-      gradient.addColorStop(0, '#1E3A8A');
-      gradient.addColorStop(1, '#06B6D4');
-      doc.context2d.fillStyle = gradient;
-      doc.rect(pageMargin, y, ticketWidth, ticketHeight);
-      doc.fill();
-      
-      doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 140, y + 10, 35, 35);
-      
-      doc.setFont('helvetica', 'sans-serif');
-      doc.setTextColor('#FFFFFF');
+      // Cream/Beige Background
+      doc.setFillColor('#F5F1E3');
+      doc.rect(pageMargin, y, ticketWidth, ticketHeight, 'F');
 
-      doc.setFontSize(8);
-      doc.text(`ID: ${attendee.id}`, pageMargin + 10, y + 15);
+      // Deep Teal Blue accent bar
+      doc.setFillColor('#2B5F6F');
+      doc.rect(pageMargin, y, 7, ticketHeight, 'F');
 
-      doc.setFontSize(16);
+      // Warm Orange decorative line
+      doc.setFillColor('#D4833C');
+      doc.rect(pageMargin + 7, y, 1.5, ticketHeight, 'F');
+
+      // Logo (if loaded) - add with error handling
+      if (logoDataURL) {
+        try {
+          doc.addImage(logoDataURL, 'PNG', pageMargin + 12, y + 8, 20, 20);
+        } catch (error) {
+          console.error('Failed to add logo to ticket:', error);
+          // Continue without logo
+        }
+      }
+
+      // Event Branding (shifted right if logo present)
+      const textStartX = logoDataURL ? pageMargin + 35 : pageMargin + 12;
+      
       doc.setFont('helvetica', 'bold');
-      doc.text(attendee.name, pageMargin + 10, y + 28);
+      doc.setFontSize(16);
+      doc.setTextColor('#2B5F6F');
+      doc.text('AI', textStartX, y + 15);
+      
+      doc.setFontSize(12);
+      doc.setTextColor('#D4833C');
+      doc.text('FOR', textStartX + 13, y + 15);
+      
+      doc.setFontSize(16);
+      doc.setTextColor('#A4464B');
+      doc.text('IA', textStartX + 25, y + 15);
+
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor('#D4833C');
+      doc.text('UNITING', textStartX, y + 22);
+      
+      doc.setFontSize(9);
+      doc.setTextColor('#A4464B');
+      doc.text('INDUSTRY-ACADEMIA', textStartX, y + 27);
+      
+      doc.setFontSize(8);
+      doc.setTextColor('#D4833C');
+      doc.text('THROUGH', textStartX, y + 32);
       
       doc.setFontSize(10);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor('#E2E8F0');
-      doc.text(attendee.organization, pageMargin + 10, y + 38);
+      doc.setTextColor('#2B5F6F');
+      doc.setFont('helvetica', 'bold');
+      doc.text('ARTIFICIAL INTELLIGENCE', textStartX, y + 37);
 
-      y += ticketHeight + 5;
+      // Decorative line
+      doc.setDrawColor('#D4833C');
+      doc.setLineWidth(0.4);
+      doc.line(pageMargin + 12, y + 41, pageMargin + 85, y + 41);
+
+      // Attendee Info
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor('#666666');
+      doc.text(`ID: ${attendee.id.substring(0, 12)}...`, pageMargin + 12, y + 46);
+
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor('#2B5F6F');
+      doc.text(attendee.name, pageMargin + 12, y + 54, { maxWidth: 75 });
+
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor('#A4464B');
+      doc.text(attendee.organization, pageMargin + 12, y + 60, { maxWidth: 75 });
+
+      // QR Code - add with error handling
+      if (qrCodeDataURL) {
+        try {
+          doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 145, y + 12, 40, 40);
+          
+          doc.setFontSize(6);
+          doc.setTextColor('#666666');
+          const qrText = 'Scan for Check-in';
+          const qrTextWidth = doc.getTextWidth(qrText);
+          doc.text(qrText, pageMargin + 165 - (qrTextWidth / 2), y + 56);
+        } catch (error) {
+          console.error(`Failed to add QR code for attendee ${attendee.name}:`, error);
+          // Continue without QR code
+        }
+      }
+
+      // Decorative corners
+      doc.setFillColor('#A4464B');
+      doc.triangle(pageMargin + ticketWidth, y, pageMargin + ticketWidth, y + 6, pageMargin + ticketWidth - 6, y, 'F');
+      doc.triangle(pageMargin, y + ticketHeight, pageMargin + 6, y + ticketHeight, pageMargin, y + ticketHeight - 6, 'F');
+
+      y += ticketHeight + ticketSpacing;
     }
 
     doc.save('all-attendee-tickets.pdf');
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
 
   return (
     <TooltipProvider>
     <Tabs defaultValue="all">
       <div className="flex items-center">
         <TabsList>
-          <TabsTrigger value="all">All</TabsTrigger>
-          <TabsTrigger value="checked-in">Checked-in</TabsTrigger>
-          <TabsTrigger value="not-checked-in">Not Checked-in</TabsTrigger>
+          <TabsTrigger value="all">All ({attendees.length})</TabsTrigger>
+          <TabsTrigger value="checked-in">
+            Checked-in ({attendees.filter(a => a.checkedIn).length})
+          </TabsTrigger>
+          <TabsTrigger value="not-checked-in">
+            Not Checked-in ({attendees.filter(a => !a.checkedIn).length})
+          </TabsTrigger>
         </TabsList>
         <div className="ml-auto flex items-center gap-2">
+          {selectedAttendees.size > 0 && (
+            <Button 
+              size="sm" 
+              variant="destructive" 
+              className="h-8 gap-1"
+              onClick={() => setDeleteDialogOpen(true)}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                Delete ({selectedAttendees.size})
+              </span>
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="h-8 gap-1" onClick={generateAllTickets}>
             <Printer className="h-3.5 w-3.5" />
             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
               Export All Tickets
             </span>
           </Button>
-           <Button size="sm" variant="outline" className="h-8 gap-1">
-            <Upload className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Import CSV
-            </span>
-          </Button>
-          <Button size="sm" className="h-8 gap-1">
-            <PlusCircle className="h-3.5 w-3.5" />
-            <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Add Attendee
-            </span>
-          </Button>
+          <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-8 gap-1">
+                <Upload className="h-3.5 w-3.5" />
+                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                  Import CSV
+                </span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Import Attendees</DialogTitle>
+                <DialogDescription>
+                  Upload a CSV or XLSX file with attendee information. Duplicates will be skipped automatically.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label>File Format</Label>
+                  <p className="text-sm text-muted-foreground">
+                    Required columns: <strong>name</strong>, <strong>organization</strong>, <strong>role</strong>
+                    <br />
+                    Optional: email
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".csv,.xlsx,.xls"
+                    onChange={handleFileImport}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Label htmlFor="file-upload">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={importing}
+                      asChild
+                    >
+                      <span>
+                        <Upload className="mr-2 h-4 w-4" />
+                        {importing ? 'Importing...' : 'Choose File'}
+                      </span>
+                    </Button>
+                  </Label>
+                </div>
+                <div className="grid gap-2">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={downloadTemplate}
+                  >
+                    Download Template
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" className="h-8 gap-1">
+                <PlusCircle className="h-3.5 w-3.5" />
+                <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
+                  Add Attendee
+                </span>
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <form onSubmit={handleAddAttendee}>
+                <DialogHeader>
+                  <DialogTitle>Add New Attendee</DialogTitle>
+                  <DialogDescription>
+                    Add a new attendee to the event.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="name">Name</Label>
+                    <Input
+                      id="name"
+                      value={formData.name}
+                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      required
+                      placeholder="John Doe"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="organization">Organization</Label>
+                    <Input
+                      id="organization"
+                      value={formData.organization}
+                      onChange={(e) => setFormData({ ...formData, organization: e.target.value })}
+                      required
+                      placeholder="Company Name"
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="role">Role</Label>
+                    <Input
+                      id="role"
+                      value={formData.role}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                      required
+                      placeholder="Software Engineer"
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button type="submit">Add Attendee</Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
       <TabsContent value="all">
@@ -192,6 +898,12 @@ export default function AttendeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={selectedAttendees.size === attendees.length && attendees.length > 0}
+                      onCheckedChange={toggleSelectAll}
+                    />
+                  </TableHead>
                   <TableHead className="hidden w-[100px] sm:table-cell">
                     <span className="sr-only">Avatar</span>
                   </TableHead>
@@ -213,6 +925,12 @@ export default function AttendeesPage() {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedAttendees.has(attendee.id)}
+                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                        />
+                      </TableCell>
                       <TableCell className="hidden sm:table-cell">
                         <Avatar className="h-10 w-10">
                           {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}
@@ -254,7 +972,222 @@ export default function AttendeesPage() {
           </CardContent>
         </Card>
       </TabsContent>
+      <TabsContent value="checked-in">
+        <Card>
+          <CardHeader>
+            <CardTitle>Checked-in Attendees</CardTitle>
+            <CardDescription>
+              Attendees who have checked in to the event.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={
+                        attendees.filter(a => a.checkedIn).length > 0 &&
+                        attendees.filter(a => a.checkedIn).every(a => selectedAttendees.has(a.id))
+                      }
+                      onCheckedChange={() => {
+                        const checkedInIds = attendees.filter(a => a.checkedIn).map(a => a.id);
+                        const allSelected = checkedInIds.every(id => selectedAttendees.has(id));
+                        const newSelected = new Set(selectedAttendees);
+                        
+                        if (allSelected) {
+                          checkedInIds.forEach(id => newSelected.delete(id));
+                        } else {
+                          checkedInIds.forEach(id => newSelected.add(id));
+                        }
+                        setSelectedAttendees(newSelected);
+                      }}
+                    />
+                  </TableHead>
+                  <TableHead className="hidden w-[100px] sm:table-cell">
+                    <span className="sr-only">Avatar</span>
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Role
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Checked-in at
+                  </TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attendees.filter(a => a.checkedIn).map((attendee) => {
+                  const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
+                  return (
+                    <TableRow key={attendee.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedAttendees.has(attendee.id)}
+                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Avatar className="h-10 w-10">
+                          {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}
+                          <AvatarFallback>{attendee.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell className="font-medium">{attendee.name} <div className="text-muted-foreground text-xs">{attendee.email}</div></TableCell>
+                      <TableCell>{attendee.organization}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {attendee.role}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {attendee.checkedIn && attendee.checkInTime && (
+                          <Badge>
+                            {new Date(attendee.checkInTime).toLocaleTimeString()}
+                          </Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => generateTicket(attendee)}>
+                                <Ticket className="h-4 w-4" />
+                                <span className="sr-only">Generate Ticket</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate Ticket</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </TabsContent>
+      <TabsContent value="not-checked-in">
+        <Card>
+          <CardHeader>
+            <CardTitle>Not Checked-in Attendees</CardTitle>
+            <CardDescription>
+              Attendees who have not checked in to the event yet.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-[50px]">
+                    <Checkbox
+                      checked={
+                        attendees.filter(a => !a.checkedIn).length > 0 &&
+                        attendees.filter(a => !a.checkedIn).every(a => selectedAttendees.has(a.id))
+                      }
+                      onCheckedChange={() => {
+                        const notCheckedInIds = attendees.filter(a => !a.checkedIn).map(a => a.id);
+                        const allSelected = notCheckedInIds.every(id => selectedAttendees.has(id));
+                        const newSelected = new Set(selectedAttendees);
+                        
+                        if (allSelected) {
+                          notCheckedInIds.forEach(id => newSelected.delete(id));
+                        } else {
+                          notCheckedInIds.forEach(id => newSelected.add(id));
+                        }
+                        setSelectedAttendees(newSelected);
+                      }}
+                    />
+                  </TableHead>
+                  <TableHead className="hidden w-[100px] sm:table-cell">
+                    <span className="sr-only">Avatar</span>
+                  </TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Organization</TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Role
+                  </TableHead>
+                  <TableHead className="hidden md:table-cell">
+                    Status
+                  </TableHead>
+                  <TableHead>
+                    <span className="sr-only">Actions</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {attendees.filter(a => !a.checkedIn).map((attendee) => {
+                  const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
+                  return (
+                    <TableRow key={attendee.id}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedAttendees.has(attendee.id)}
+                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                        />
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell">
+                        <Avatar className="h-10 w-10">
+                          {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}
+                          <AvatarFallback>{attendee.name.split(' ').map(n => n[0]).join('')}</AvatarFallback>
+                        </Avatar>
+                      </TableCell>
+                      <TableCell className="font-medium">{attendee.name} <div className="text-muted-foreground text-xs">{attendee.email}</div></TableCell>
+                      <TableCell>{attendee.organization}</TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        {attendee.role}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell">
+                        <Badge variant="secondary">Not Yet</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button variant="ghost" size="icon" onClick={() => generateTicket(attendee)}>
+                                <Ticket className="h-4 w-4" />
+                                <span className="sr-only">Generate Ticket</span>
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>Generate Ticket</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      </TabsContent>
     </Tabs>
+    
+    {/* Delete Confirmation Dialog */}
+    <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete Attendees</AlertDialogTitle>
+          <AlertDialogDescription>
+            Are you sure you want to delete {selectedAttendees.size} attendee(s)? 
+            This action cannot be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={handleDeleteSelected}
+            disabled={deleting}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {deleting ? 'Deleting...' : 'Delete'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </TooltipProvider>
   );
 }

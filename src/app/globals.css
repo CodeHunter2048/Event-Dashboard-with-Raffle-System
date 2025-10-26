@@ -2,67 +2,147 @@
 @tailwind components;
 @tailwind utilities;
 
+/* 
+ * AI for IA Event Theme System
+ * =============================
+ * This theme supports both light and dark modes.
+ * 
+ * Color Palette:
+ * - Primary (Deep Teal Blue): #2B5F6F - Headers, primary actions
+ * - Secondary (Warm Orange/Gold): #D4833C - Highlights, accents
+ * - Accent (Burgundy/Maroon): #A4464B - Important elements
+ * - Background (Cream): #F5F1E3 - Main background (light mode)
+ * - Gold/Tan: #B8935E - Additional accent color
+ * 
+ * Usage:
+ * - The app defaults to light mode
+ * - Users can toggle between light/dark/system modes using the theme toggle button
+ * - Theme preference is saved in localStorage
+ * 
+ * Custom Classes:
+ * - .gradient-ring - Signature circular gradient from logo
+ * - .bg-brand-* - Brand color backgrounds
+ * - .text-brand-* - Brand color text
+ * - .border-brand-* - Brand color borders
+ */
+
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 71.4% 4.1%;
+    /* AI for IA Event Theme - Light Mode */
+    /* Background: Cream/Beige #F5F1E3 */
+    --background: 48 50% 93%;
+    --foreground: 195 45% 30%;
+    
+    /* Cards: White/Cream with gradient borders */
     --card: 0 0% 100%;
-    --card-foreground: 224 71.4% 4.1%;
+    --card-foreground: 195 45% 30%;
+    
+    /* Popovers */
     --popover: 0 0% 100%;
-    --popover-foreground: 224 71.4% 4.1%;
-    --primary: 217 91.2% 59.8%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 220 14.3% 95.9%;
-    --secondary-foreground: 220.9 39.3% 11%;
-    --muted: 220 14.3% 95.9%;
-    --muted-foreground: 220 8.9% 46.1%;
-    --accent: 188 94.9% 41.6%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 220 13% 91%;
-    --input: 220 13% 91%;
-    --ring: 217 91.2% 59.8%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 188 95% 42%;
-    --chart-3: 282 84% 57%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
+    --popover-foreground: 195 45% 30%;
+    
+    /* Primary: Deep Teal Blue #2B5F6F */
+    --primary: 195 45% 30%;
+    --primary-foreground: 48 50% 93%;
+    
+    /* Secondary: Warm Orange/Gold #D4833C */
+    --secondary: 28 63% 53%;
+    --secondary-foreground: 48 50% 93%;
+    
+    /* Muted: Light teal tones */
+    --muted: 195 25% 85%;
+    --muted-foreground: 195 30% 40%;
+    
+    /* Accent: Burgundy/Maroon Red #A4464B */
+    --accent: 357 40% 46%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Destructive: Burgundy Red for errors */
+    --destructive: 357 40% 46%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders: Subtle cream tones */
+    --border: 48 30% 85%;
+    --input: 48 30% 85%;
+    
+    /* Ring: Deep Teal */
+    --ring: 195 45% 30%;
+    
+    /* Chart colors using brand palette */
+    --chart-1: 195 45% 30%;  /* Deep Teal */
+    --chart-2: 28 63% 53%;   /* Warm Orange */
+    --chart-3: 357 40% 46%;  /* Burgundy */
+    --chart-4: 38 40% 55%;   /* Gold/Tan */
+    --chart-5: 48 50% 93%;   /* Cream */
+    
+    /* Warning colors: Orange background */
+    --warning: 28 63% 53%;
+    --warning-foreground: 48 50% 93%;
+    
     --radius: 0.5rem;
   }
+  
   .dark {
-    --background: 215 28% 17%;
-    --foreground: 210 20% 98%;
-    --card: 215 28% 22%;
-    --card-foreground: 210 20% 98%;
-    --popover: 215 28% 22%;
-    --popover-foreground: 210 20% 98%;
-    --primary: 217 91.2% 59.8%;
-    --primary-foreground: 210 20% 98%;
-    --secondary: 217 32.6% 25.1%;
-    --secondary-foreground: 210 20% 98%;
-    --muted: 217.2 32.6% 25.1%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 188 94.9% 41.6%;
-    --accent-foreground: 210 20% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 20% 98%;
-    --border: 217.2 32.6% 25.1%;
-    --input: 217.2 32.6% 25.1%;
-    --ring: 217 91.2% 59.8%;
-    --chart-1: 217 91% 60%;
-    --chart-2: 188 95% 42%;
-    --chart-3: 282 84% 57%;
-    --chart-4: 43 74% 66%;
-    --chart-5: 27 87% 67%;
-    --sidebar-background: 215 28% 17%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 217 91.2% 59.8%;
-    --sidebar-primary-foreground: 210 20% 98%;
-    --sidebar-accent: 217 32.6% 25.1%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 217.2 32.6% 25.1%;
-    --sidebar-ring: 217 91.2% 59.8%;
+    /* AI for IA Event Theme - Dark Mode */
+    /* Background: Dark with warm undertones */
+    --background: 195 30% 15%;
+    --foreground: 48 50% 93%;
+    
+    /* Cards: Slightly lighter dark */
+    --card: 195 28% 20%;
+    --card-foreground: 48 50% 93%;
+    
+    /* Popovers */
+    --popover: 195 28% 20%;
+    --popover-foreground: 48 50% 93%;
+    
+    /* Primary: Lighter Teal for visibility */
+    --primary: 195 50% 45%;
+    --primary-foreground: 0 0% 100%;
+    
+    /* Secondary: Warm Orange/Gold */
+    --secondary: 28 63% 53%;
+    --secondary-foreground: 195 30% 15%;
+    
+    /* Muted: Dark teal tones */
+    --muted: 195 20% 30%;
+    --muted-foreground: 195 20% 70%;
+    
+    /* Accent: Burgundy/Maroon */
+    --accent: 357 45% 55%;
+    --accent-foreground: 0 0% 100%;
+    
+    /* Destructive: Lighter burgundy for dark mode */
+    --destructive: 357 50% 50%;
+    --destructive-foreground: 0 0% 100%;
+    
+    /* Borders */
+    --border: 195 20% 30%;
+    --input: 195 20% 30%;
+    
+    /* Ring: Bright teal */
+    --ring: 195 50% 45%;
+    
+    /* Chart colors for dark mode */
+    --chart-1: 195 50% 45%;  /* Lighter Teal */
+    --chart-2: 28 70% 60%;   /* Brighter Orange */
+    --chart-3: 357 50% 55%;  /* Lighter Burgundy */
+    --chart-4: 38 50% 60%;   /* Brighter Gold */
+    --chart-5: 48 30% 70%;   /* Light Cream */
+    
+    /* Warning colors */
+    --warning: 28 63% 53%;
+    --warning-foreground: 48 50% 93%;
+    
+    /* Sidebar colors */
+    --sidebar-background: 195 30% 15%;
+    --sidebar-foreground: 48 50% 93%;
+    --sidebar-primary: 195 50% 45%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 195 28% 20%;
+    --sidebar-accent-foreground: 48 50% 93%;
+    --sidebar-border: 195 20% 30%;
+    --sidebar-ring: 195 50% 45%;
   }
 }
 
@@ -72,5 +152,87 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  /* AI for IA Event Brand Gradients */
+  .gradient-ring {
+    background: linear-gradient(
+      135deg,
+      #A4464B 0%,     /* Burgundy */
+      #2B5F6F 25%,    /* Deep Teal */
+      #B8935E 50%,    /* Gold/Tan */
+      #D4833C 75%,    /* Warm Orange */
+      #A4464B 100%    /* Back to Burgundy */
+    );
+  }
+  
+  .gradient-border {
+    border-image: linear-gradient(
+      135deg,
+      #A4464B 0%,
+      #2B5F6F 25%,
+      #B8935E 50%,
+      #D4833C 75%,
+      #A4464B 100%
+    ) 1;
+  }
+  
+  /* Brand Color Classes */
+  .bg-brand-teal {
+    background-color: #2B5F6F;
+  }
+  
+  .bg-brand-orange {
+    background-color: #D4833C;
+  }
+  
+  .bg-brand-burgundy {
+    background-color: #A4464B;
+  }
+  
+  .bg-brand-cream {
+    background-color: #F5F1E3;
+  }
+  
+  .bg-brand-gold {
+    background-color: #B8935E;
+  }
+  
+  .text-brand-teal {
+    color: #2B5F6F;
+  }
+  
+  .text-brand-orange {
+    color: #D4833C;
+  }
+  
+  .text-brand-burgundy {
+    color: #A4464B;
+  }
+  
+  .text-brand-cream {
+    color: #F5F1E3;
+  }
+  
+  .text-brand-gold {
+    color: #B8935E;
+  }
+  
+  .border-brand-teal {
+    border-color: #2B5F6F;
+  }
+  
+  .border-brand-orange {
+    border-color: #D4833C;
+  }
+  
+  .border-brand-burgundy {
+    border-color: #A4464B;
+  }
+  
+  .border-brand-gold {
+    border-color: #B8935E;
   }
 }

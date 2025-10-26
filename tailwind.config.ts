@@ -65,6 +65,22 @@ export default {
           border: 'hsl(var(--sidebar-border))',
           ring: 'hsl(var(--sidebar-ring))',
         },
+        // AI for IA Event Brand Colors
+        brand: {
+          teal: '#2B5F6F',
+          'teal-light': '#3A6B7C',
+          orange: '#D4833C',
+          'orange-light': '#E09547',
+          burgundy: '#A4464B',
+          'burgundy-light': '#B44C51',
+          cream: '#F5F1E3',
+          'cream-light': '#FFF8E7',
+          gold: '#B8935E',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+        },
       },
       borderRadius: {
         lg: 'var(--radius)',

@@ -14,6 +14,9 @@ import {
 } from 'lucide-react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/navigation';
+import { signOut } from 'firebase/auth';
+import { auth } from '@/lib/firebase';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -42,10 +45,33 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { SidebarNav } from './sidebar-nav';
+import { useToast } from '@/hooks/use-toast';
+
 
 const userAvatar = PlaceHolderImages.find(img => img.id === 'user-avatar');
 
 export function DashboardHeader() {
+  const router = useRouter();
+  const { toast } = useToast();
+
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+      toast({
+        title: 'Logged Out',
+        description: 'You have been successfully logged out.',
+      });
+      router.push('/login');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Logout Failed',
+        description: 'An error occurred while logging out. Please try again.',
+      });
+    }
+  };
+
   return (
     <header className="flex h-14 items-center gap-4 border-b bg-card px-4 lg:h-[60px] lg:px-6">
       <SidebarTrigger className="-ml-1" />
@@ -101,7 +127,7 @@ export function DashboardHeader() {
           <DropdownMenuItem>Settings</DropdownMenuItem>
           <DropdownMenuItem>Support</DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem>Logout</DropdownMenuItem>
+          <DropdownMenuItem onClick={handleLogout}>Logout</DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
     </header>

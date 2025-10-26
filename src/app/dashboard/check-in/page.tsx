@@ -47,19 +47,13 @@ import {
   getDocs,
 } from 'firebase/firestore';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useAuth } from '@/hooks/use-auth';
 
 type ScanStatus = 'success' | 'error' | 'duplicate' | 'idle';
 
-interface ScanLog {
-  attendeeId: string;
-  attendeeName: string;
-  scannedBy: string;
-  scannedAt: any;
-  action: 'checked-in' | 'already-checked-in' | 'not-found';
-}
-
 export default function CheckInPage() {
   const { toast } = useToast();
+  const { user } = useAuth();
   const [lastScan, setLastScan] = useState<{
     status: ScanStatus;
     attendee: Attendee | null;
@@ -71,31 +65,31 @@ export default function CheckInPage() {
   const [scanning, setScanning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hasCameraPermission, setHasCameraPermission] = useState<boolean | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
-  const scannerRef = useRef<HTMLDivElement>(null);
-  const currentUser = 'Admin'; // In real app, get from auth context
 
   useEffect(() => {
     const getCameraPermission = async () => {
       try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const hasCamera = devices.some(device => device.kind === 'videoinput');
+        if (hasCamera) {
+          // Request permission to start stream, but don't keep it open
           const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+          stream.getTracks().forEach(track => track.stop());
           setHasCameraPermission(true);
-          if (videoRef.current) {
-            videoRef.current.srcObject = stream;
-          }
         } else {
           setHasCameraPermission(false);
         }
       } catch (error) {
         console.error('Error accessing camera:', error);
         setHasCameraPermission(false);
-        toast({
-          variant: 'destructive',
-          title: 'Camera Access Denied',
-          description: 'Please enable camera permissions in your browser settings to use the scanner.',
-        });
+        if ((error as Error).name === 'NotAllowedError') {
+          toast({
+            variant: 'destructive',
+            title: 'Camera Access Denied',
+            description: 'Please enable camera permissions in your browser settings to use the scanner.',
+          });
+        }
       }
     };
 
@@ -171,7 +165,6 @@ export default function CheckInPage() {
     if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
       try {
         await html5QrCodeRef.current.stop();
-        setScanning(false);
       } catch (error) {
         console.error('Error stopping scanner:', error);
       }
@@ -227,9 +220,10 @@ export default function CheckInPage() {
 
     try {
       const attendeeRef = doc(db, 'attendees', pendingAttendee.id);
+      const checkInTimestamp = serverTimestamp();
       await updateDoc(attendeeRef, {
         checkedIn: true,
-        checkInTime: serverTimestamp(),
+        checkInTime: checkInTimestamp,
       });
 
       await logScan(pendingAttendee.id, pendingAttendee.name, 'checked-in');
@@ -259,10 +253,9 @@ export default function CheckInPage() {
       await addDoc(collection(db, 'scanlogs'), {
         attendeeId,
         attendeeName,
-        scannedBy: currentUser,
-        scannedAt: serverTimestamp(),
+        scannedBy: user?.displayName || 'Unknown Scanner',
+        timestamp: serverTimestamp(),
         action,
-        timestamp: new Date().toISOString(),
       });
     } catch (error) {
       console.error('Error logging scan:', error);
@@ -325,7 +318,9 @@ export default function CheckInPage() {
 
             {!scanning && hasCameraPermission !== false && (
               <div className="flex flex-col items-center gap-4 text-center">
-                <Camera className="h-32 w-32 text-muted-foreground" />
+                <div className="w-48 h-48 flex items-center justify-center bg-gray-800 rounded-lg">
+                    <Camera className="h-32 w-32 text-muted-foreground" />
+                </div>
                 <Button onClick={startScanner} size="lg" disabled={loading}>
                   <Camera className="h-5 w-5 mr-2" />
                   {loading ? 'Starting...' : 'Start Scanner'}

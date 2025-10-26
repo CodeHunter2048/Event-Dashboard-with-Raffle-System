@@ -8,9 +8,17 @@ import { errorEmitter } from '@/firebase/error-emitter';
 
 let adminApp: App;
 if (!getApps().some(app => app.name === 'admin')) {
-    const serviceAccount = require('../../../../serviceAccountKey.json');
+    // Use environment variable for Vercel deployment
+    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
+        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+        : require('../../../../serviceAccountKey.json'); // Fallback for local development
+    
     adminApp = initializeApp({
-        credential: cert(serviceAccount)
+        credential: cert({
+            projectId: serviceAccount.project_id,
+            clientEmail: serviceAccount.client_email,
+            privateKey: serviceAccount.private_key?.replace(/\\n/g, '\n'),
+        })
     }, 'admin');
 } else {
     adminApp = getApp('admin');

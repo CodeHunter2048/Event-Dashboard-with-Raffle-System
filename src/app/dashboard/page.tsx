@@ -10,7 +10,7 @@ import {
   Gift,
   CheckCircle,
 } from 'lucide-react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -33,24 +33,64 @@ import {
 import { db } from '@/lib/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import withAuth from '@/components/withAuth';
-import { attendees as staticAttendees } from '@/lib/data';
+import { Attendee } from '@/lib/data';
+
 
 function Dashboard() {
-  const [attendees, setAttendees] = useState([]);
-  const [checkedInAttendees, setCheckedInAttendees] = useState([]);
+  const [totalAttendees, setTotalAttendees] = useState(0);
+  const [checkedInCount, setCheckedInCount] = useState(0);
+  const [recentCheckins, setRecentCheckins] = useState<Attendee[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchAttendees = async () => {
-      // Using static data for now as firestore is not populated
-      const attendeesData = staticAttendees;
-      setAttendees(attendeesData);
-      setCheckedInAttendees(attendeesData.filter(a => a.checkedIn));
+    if (!db) return;
+
+    // Listener for all attendees to get total count
+    const attendeesQuery = query(collection(db, 'attendees'));
+    const unsubscribeTotal = onSnapshot(attendeesQuery, (snapshot) => {
+      setTotalAttendees(snapshot.size);
+    });
+
+    // Listener for recently checked-in attendees
+    const recentCheckinsQuery = query(
+      collection(db, 'attendees'),
+      where('checkedIn', '==', true),
+      orderBy('checkInTime', 'desc'),
+      limit(5)
+    );
+
+    const unsubscribeRecent = onSnapshot(recentCheckinsQuery, (snapshot) => {
+      const checkinsData = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name || '',
+          email: data.email || '',
+          organization: data.organization || '',
+          role: data.role || '',
+          avatar: data.avatar || '1',
+          checkedIn: data.checkedIn || false,
+          checkInTime: data.checkInTime ? new Date(data.checkInTime.seconds * 1000).toISOString() : null,
+          createdAt: data.createdAt,
+        } as Attendee;
+      });
+      setRecentCheckins(checkinsData);
+      setLoading(false);
+    });
+    
+    // Listener for checked-in count
+    const checkedInQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
+    const unsubscribeCheckedIn = onSnapshot(checkedInQuery, (snapshot) => {
+      setCheckedInCount(snapshot.size);
+    });
+
+
+    return () => {
+      unsubscribeTotal();
+      unsubscribeRecent();
+      unsubscribeCheckedIn();
     };
-
-    fetchAttendees();
   }, []);
-
-  const recentCheckins = checkedInAttendees.slice(0, 5);
 
   return (
     <>
@@ -63,7 +103,7 @@ function Dashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{attendees.length}</div>
+            <div className="text-2xl font-bold">{totalAttendees}</div>
             <p className="text-xs text-muted-foreground">
               Total registered for the event
             </p>
@@ -77,9 +117,9 @@ function Dashboard() {
             <CheckCircle className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{checkedInAttendees.length}</div>
+            <div className="text-2xl font-bold">{checkedInCount}</div>
             <p className="text-xs text-muted-foreground">
-              {`+${attendees.length > 0 ? ((checkedInAttendees.length / attendees.length) * 100).toFixed(0) : 0}% of total`}
+              {`+${totalAttendees > 0 ? ((checkedInCount / totalAttendees) * 100).toFixed(0) : 0}% of total`}
             </p>
           </CardContent>
         </Card>
@@ -141,36 +181,46 @@ function Dashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {recentCheckins.map((attendee) => {
-                  const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
-                  return (
-                    <TableRow key={attendee.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="hidden h-9 w-9 sm:flex">
-                           {avatar && <AvatarImage src={avatar.imageUrl} alt="Avatar" data-ai-hint={avatar.imageHint} />}
-                            <AvatarFallback>{attendee.name.charAt(0)}</AvatarFallback>
-                          </Avatar>
-                          <div className="grid gap-0.5">
-                            <div className="font-medium">{attendee.name}</div>
-                            <div className="hidden text-sm text-muted-foreground md:inline">
-                              {attendee.email}
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">Loading recent check-ins...</TableCell>
+                  </TableRow>
+                ) : recentCheckins.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center">No check-ins yet.</TableCell>
+                  </TableRow>
+                ) : (
+                  recentCheckins.map((attendee) => {
+                    const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
+                    return (
+                      <TableRow key={attendee.id}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="hidden h-9 w-9 sm:flex">
+                             {avatar && <AvatarImage src={avatar.imageUrl} alt="Avatar" data-ai-hint={avatar.imageHint} />}
+                              <AvatarFallback>{attendee.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
+                            </Avatar>
+                            <div className="grid gap-0.5">
+                              <div className="font-medium">{attendee.name}</div>
+                              <div className="hidden text-sm text-muted-foreground md:inline">
+                                {attendee.email}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      </TableCell>
-                      <TableCell className="hidden xl:table-cell">
-                        <Badge variant="outline">{attendee.role}</Badge>
-                      </TableCell>
-                       <TableCell className="hidden md:table-cell lg:hidden xl:table-cell">
-                        {new Date(attendee.checkInTime!).toLocaleTimeString()}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        {attendee.organization}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell">
+                          <Badge variant="outline">{attendee.role}</Badge>
+                        </TableCell>
+                         <TableCell className="hidden md:table-cell lg:hidden xl:table-cell">
+                          {attendee.checkInTime ? new Date(attendee.checkInTime).toLocaleTimeString() : 'N/A'}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {attendee.organization}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </CardContent>

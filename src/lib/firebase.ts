@@ -2,6 +2,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
 import { getFirestore, Firestore } from "firebase/firestore";
 import { getAuth, Auth } from "firebase/auth";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 // Your web app's Firebase configuration
 // For security reasons, store these values in environment variables
@@ -44,6 +45,7 @@ function validateFirebaseConfig() {
 let app: FirebaseApp | undefined;
 let db: Firestore | undefined;
 let auth: Auth | undefined;
+let storage: FirebaseStorage | undefined;
 
 if (typeof window !== 'undefined') {
   try {
@@ -53,6 +55,7 @@ if (typeof window !== 'undefined') {
       app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
       db = getFirestore(app);
       auth = getAuth(app);
+      storage = getStorage(app);
       console.log('✅ Firebase initialized successfully');
     } else {
       console.warn('⚠️ Firebase not initialized due to configuration errors. Please check your .env.local file.');
@@ -73,4 +76,4 @@ export function isFirebaseReady(): boolean {
   return !!(app && db && auth);
 }
 
-export { db, auth, app };
+export { db, auth, app, storage };

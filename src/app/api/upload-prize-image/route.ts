@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { writeFile } from 'fs/promises';
-import path from 'path';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { app } from '@/lib/firebase';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,6 +32,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Initialize Firebase Storage
+    if (!app) {
+      return NextResponse.json(
+        { error: 'Firebase not initialized' },
+        { status: 500 }
+      );
+    }
+
+    const storage = getStorage(app);
+    
+    // Convert file to bytes
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
@@ -40,16 +51,20 @@ export async function POST(request: NextRequest) {
     const extension = file.name.split('.').pop();
     const filename = `${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
-    // Save to public/prizes directory
-    const publicPath = path.join(process.cwd(), 'public', 'prizes', filename);
-    await writeFile(publicPath, buffer);
+    // Create a reference to the storage location
+    const storageRef = ref(storage, `prizes/${filename}`);
 
-    // Return the public URL path
-    const imagePath = `/prizes/${filename}`;
+    // Upload the file to Firebase Storage
+    await uploadBytes(storageRef, buffer, {
+      contentType: file.type,
+    });
+
+    // Get the download URL
+    const downloadURL = await getDownloadURL(storageRef);
 
     return NextResponse.json({
       success: true,
-      imagePath,
+      imagePath: downloadURL,
       message: 'Image uploaded successfully',
     });
   } catch (error) {

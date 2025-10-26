@@ -4,29 +4,103 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { attendees, prizes, Prize, Winner } from '@/lib/data';
 import { Confetti } from '@/components/confetti';
-import { Award, Check, Redo, Users, Trophy } from 'lucide-react';
+import { Award, Check, Redo, Users, Trophy, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { useToast } from '@/hooks/use-toast';
 
-const checkedInAttendees = attendees.filter(a => a.checkedIn);
+// Firestore-compatible interfaces
+interface Attendee {
+  id: string; 
+  name: string;
+  organization: string;
+  avatar: number;
+  checkedIn: boolean;
+}
+
+interface Prize {
+  id: string; 
+  name: string;
+  description: string;
+  tier: string;
+  quantity: number;
+  remaining: number;
+}
+
+interface Winner {
+  attendee: Attendee;
+  prize: Prize;
+  timestamp: string;
+}
 
 type DrawingState = 'idle' | 'drawing' | 'revealed';
 
 export default function DrawingPage() {
+  const { toast } = useToast();
+  const [allPrizes, setAllPrizes] = useState<Prize[]>([]);
   const [selectedPrize, setSelectedPrize] = useState<Prize | null>(null);
   const [drawingState, setDrawingState] = useState<DrawingState>('idle');
-  const [winner, setWinner] = useState<(typeof checkedInAttendees[0]) | null>(null);
-  const [eligiblePool, setEligiblePool] = useState(checkedInAttendees);
+  const [winner, setWinner] = useState<Attendee | null>(null);
+  const [eligiblePool, setEligiblePool] = useState<Attendee[]>([]);
   const [shuffledNames, setShuffledNames] = useState<string[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [winnersList, setWinnersList] = useState<Winner[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Fetches all necessary data from Firestore on initial load
+  const fetchData = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      // 1. Fetch all prizes
+      const prizesQuery = query(collection(db, 'prizes'), orderBy('name'));
+      const prizesSnapshot = await getDocs(prizesQuery);
+      const prizesData = prizesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
+      setAllPrizes(prizesData);
+
+      // 2. Fetch all checked-in attendees
+      const attendeesQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
+      const attendeesSnapshot = await getDocs(attendeesQuery);
+      const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
+
+      // 3. Fetch all past winners to determine who is ineligible
+      const winnersQuery = query(collection(db, 'winners'));
+      const winnersSnapshot = await getDocs(winnersQuery);
+      const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
+      
+      // 4. Calculate the eligible pool
+      const eligibleAttendees = checkedInAttendees.filter(attendee => !winnerAttendeeIds.has(attendee.id));
+      setEligiblePool(eligibleAttendees);
+      
+      // 5. Fetch recent winners for display
+      const recentWinnersQuery = query(collection(db, 'winners'), orderBy('timestamp', 'desc'), limit(10));
+      const recentWinnersSnapshot = await getDocs(recentWinnersQuery);
+      const recentWinnersData = recentWinnersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const attendee = checkedInAttendees.find(a => a.id === data.attendeeId) || { id: data.attendeeId, name: data.attendeeName, organization: data.attendeeOrganization, avatar: 1, checkedIn: true };
+        const prize = prizesData.find(p => p.id === data.prizeId) || { id: data.prizeId, name: data.prizeName, tier: 'Unknown', remaining: 0, quantity: 0, description: '' };
+        return { attendee, prize, timestamp: new Date(data.timestamp?.toDate()).toISOString() };
+      }) as Winner[];
+      setWinnersList(recentWinnersData);
+
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast({ title: "Error", description: "Failed to load raffle data from the database.", variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [toast]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const handlePrizeChange = (prizeId: string) => {
-    const prize = prizes.find(p => p.id === prizeId);
+    const prize = allPrizes.find(p => p.id === prizeId);
     setSelectedPrize(prize || null);
     resetDraw();
   };
@@ -37,10 +111,8 @@ export default function DrawingPage() {
     setShowConfetti(false);
     setIsModalOpen(true);
     
-    let tempShuffled = [];
-    for(let i=0; i<10; i++){
-        tempShuffled.push(...[...eligiblePool].sort(() => Math.random() - 0.5));
-    }
+    // Shuffle animation logic
+    let tempShuffled = [...eligiblePool].sort(() => Math.random() - 0.5).slice(0, 20);
     const finalWinner = eligiblePool[Math.floor(Math.random() * eligiblePool.length)];
     tempShuffled.push(finalWinner);
     setShuffledNames(tempShuffled.map(a => a.name));
@@ -52,36 +124,46 @@ export default function DrawingPage() {
     }, 4000); 
   };
 
-  const confirmWinner = () => {
+  const confirmWinner = async () => {
     if (!winner || !selectedPrize) return;
 
-    const newWinnerEntry: Winner = {
-        attendee: winner,
-        prize: selectedPrize,
-        timestamp: new Date().toISOString(),
-        claimed: false, // Or true if claimed immediately
-    };
-    setWinnersList(prev => [newWinnerEntry, ...prev]);
+    try {
+      const batch = writeBatch(db);
 
-    setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
-    
-    const prizeIndex = prizes.findIndex(p => p.id === selectedPrize.id);
-    if(prizeIndex !== -1) {
-        prizes[prizeIndex].remaining -= 1;
-    }
+      // 1. Create a new winner document
+      const winnerRef = doc(collection(db, "winners"));
+      batch.set(winnerRef, {
+        attendeeId: winner.id,
+        attendeeName: winner.name,
+        attendeeOrganization: winner.organization,
+        prizeId: selectedPrize.id,
+        prizeName: selectedPrize.name,
+        timestamp: serverTimestamp(),
+        claimed: false,
+      });
 
-    if(selectedPrize.remaining <= 1){
-        setSelectedPrize(null);
+      // 2. Update the prize's remaining quantity
+      const prizeRef = doc(db, "prizes", selectedPrize.id);
+      batch.update(prizeRef, { remaining: selectedPrize.remaining - 1 });
+      
+      await batch.commit();
+
+      toast({ title: "Winner Confirmed!", description: `${winner.name} won the ${selectedPrize.name}.` });
+
+      // 3. Update local state immediately for instant UI feedback
+      fetchData(); // Refetch data to ensure consistency
+
+    } catch (error) {
+      console.error("Error confirming winner:", error);
+      toast({ title: "Error", description: "Could not save the winner. Please try again.", variant: "destructive" });
     }
-    
     resetDraw();
   };
 
   const redraw = () => {
     if (!winner) return;
-    // Keep the winner out of the pool for this specific prize draw
     setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
-    resetDraw(false); // don't close modal
+    resetDraw(false); 
     startDrawing();
   };
   
@@ -95,13 +177,10 @@ export default function DrawingPage() {
   }
 
   const NameCarousel = useCallback(() => {
+    // This component remains largely the same, no changes needed
     const [currentIndex, setCurrentIndex] = useState(0);
-    
     useEffect(() => {
-        if (drawingState !== 'drawing') {
-            return;
-        };
-
+        if (drawingState !== 'drawing') return;
         const interval = setInterval(() => {
             setCurrentIndex(prev => {
                 if (prev >= shuffledNames.length - 2) {
@@ -111,28 +190,32 @@ export default function DrawingPage() {
                 return prev + 1;
             });
         }, 100);
-
         return () => clearInterval(interval);
     }, [drawingState, shuffledNames]);
 
     const transformY = `translateY(-${currentIndex * 100}%)`;
-
     return (
         <div className="h-32 overflow-hidden relative">
             <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background to-transparent z-10"/>
             <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-background to-transparent z-10"/>
             <div className="transition-transform duration-100 ease-linear" style={{ transform: transformY }}>
                 {shuffledNames.map((name, index) => (
-                    <div key={index} className="h-32 flex items-center justify-center text-5xl md:text-7xl font-bold">
-                        {name}
-                    </div>
+                    <div key={index} className="h-32 flex items-center justify-center text-5xl md:text-7xl font-bold">{name}</div>
                 ))}
             </div>
         </div>
     )
-
   }, [shuffledNames, drawingState]);
 
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        <p className="ml-2">Loading Raffle Data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="grid gap-6 md:grid-cols-2">
@@ -148,7 +231,7 @@ export default function DrawingPage() {
                 <SelectValue placeholder="Select a prize..." />
               </SelectTrigger>
               <SelectContent>
-                {prizes.filter(p => p.remaining > 0).map(prize => (
+                {allPrizes.filter(p => p.remaining > 0).map(prize => (
                   <SelectItem key={prize.id} value={prize.id}>
                     {prize.name} ({prize.tier}) - {prize.remaining} left
                   </SelectItem>
@@ -161,29 +244,19 @@ export default function DrawingPage() {
         {selectedPrize && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Award />
-                Prize Details
-              </CardTitle>
+              <CardTitle className="flex items-center gap-2"><Award />Prize Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
               <h3 className="text-xl font-bold">{selectedPrize.name}</h3>
               <p className="text-muted-foreground">{selectedPrize.description}</p>
               <div className='grid grid-cols-2 gap-4'>
-                <p>
-                    <span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining
-                </p>
+                <p><span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining</p>
                 <div>
                   <div className="flex items-center gap-2"><Users />Eligible Pool</div>
-                  <p className="text-muted-foreground mt-1">{eligiblePool.length} checked-in attendees are eligible to win.</p>
+                  <p className="text-muted-foreground mt-1">{eligiblePool.length} people are eligible to win.</p>
                 </div>
               </div>
-               <Button
-                className="w-full mt-4"
-                size="lg"
-                onClick={startDrawing}
-                disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0}
-                >
+               <Button className="w-full mt-4" size="lg" onClick={startDrawing} disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0}>
                 {eligiblePool.length === 0 ? 'No Eligible Attendees' : 'Start Draw'}
                 </Button>
             </CardContent>
@@ -194,7 +267,7 @@ export default function DrawingPage() {
        <Card>
             <CardHeader>
                 <CardTitle>Recent Winners</CardTitle>
-                <CardDescription>List of recently drawn winners.</CardDescription>
+                <CardDescription>List of recently drawn winners from the database.</CardDescription>
             </CardHeader>
             <CardContent>
                 {winnersList.length === 0 ? (
@@ -230,13 +303,8 @@ export default function DrawingPage() {
                  <DialogHeader className="p-4 flex-shrink-0 border-b">
                     <DialogTitle className="text-2xl font-bold">{selectedPrize?.name}</DialogTitle>
                  </DialogHeader>
-
                 <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80 overflow-hidden">
-                    {drawingState === 'idle' && (
-                        <div className="flex items-center justify-center h-full">
-                            <Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/>
-                        </div>
-                    )}
+                    {drawingState === 'idle' && <div className="flex items-center justify-center h-full"><Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/></div>}
                     {drawingState === 'drawing' && <NameCarousel />}
                     {drawingState === 'revealed' && winner && (
                         <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center justify-center">
@@ -254,16 +322,11 @@ export default function DrawingPage() {
                         </div>
                     )}
                 </div>
-                
                 <div className="flex-shrink-0 p-4 bg-muted/50 border-t">
                     {drawingState === 'revealed' && (
                         <div className="grid grid-cols-2 gap-4">
-                        <Button size="lg" variant="outline" onClick={redraw}>
-                            <Redo className="mr-2 h-4 w-4" /> Redraw
-                        </Button>
-                        <Button size="lg" onClick={confirmWinner}>
-                            <Check className="mr-2 h-4 w-4" /> Confirm Winner
-                        </Button>
+                        <Button size="lg" variant="outline" onClick={redraw}><Redo className="mr-2 h-4 w-4" /> Redraw</Button>
+                        <Button size="lg" onClick={confirmWinner}><Check className="mr-2 h-4 w-4" /> Confirm Winner</Button>
                         </div>
                     )}
                      {drawingState === 'drawing' && (

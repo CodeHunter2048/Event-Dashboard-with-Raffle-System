@@ -4,9 +4,10 @@ Your application has been updated to use **Firebase Storage** instead of direct 
 
 ## Changes Made
 
-1. ✅ Updated `src/lib/firebase.ts` to initialize Firebase Storage
-2. ✅ Rewrote `src/app/api/upload-prize-image/route.ts` to use Firebase Storage instead of filesystem
-3. ✅ Created `storage.rules` for Firebase Storage security
+1. ✅ Updated `src/lib/firebase.ts` to initialize Firebase Storage (client-side)
+2. ✅ Updated `src/lib/firebase-admin.ts` to initialize Firebase Storage (server-side)
+3. ✅ Rewrote `src/app/api/upload-prize-image/route.ts` to use Firebase Admin Storage
+4. ✅ Created `storage.rules` for Firebase Storage security
 
 ## Setup Steps
 
@@ -79,11 +80,13 @@ const imagePath = `/prizes/${filename}`;
 
 ### After (✅ Works on Vercel)
 ```typescript
-// Upload to Firebase Storage
-const storageRef = ref(storage, `prizes/${filename}`);
-await uploadBytes(storageRef, buffer, { contentType: file.type });
-const downloadURL = await getDownloadURL(storageRef);
-// Returns: https://firebasestorage.googleapis.com/...
+// Upload to Firebase Storage using Admin SDK
+const bucket = adminStorage.bucket();
+const fileRef = bucket.file(`prizes/${filename}`);
+await fileRef.save(buffer, { metadata: { contentType: file.type } });
+await fileRef.makePublic();
+const publicUrl = `https://storage.googleapis.com/${bucket.name}/prizes/${filename}`;
+// Returns: https://storage.googleapis.com/your-project.appspot.com/prizes/...
 ```
 
 ## Benefits
@@ -97,8 +100,9 @@ const downloadURL = await getDownloadURL(storageRef);
 ## Troubleshooting
 
 ### Error: "Firebase not initialized"
-- Make sure all Firebase environment variables are set
+- Make sure all Firebase environment variables are set (both client and server)
 - Check that `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` is correct
+- Verify Firebase Admin credentials are configured (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`)
 
 ### Error: "Permission denied"
 - Deploy or update your `storage.rules`

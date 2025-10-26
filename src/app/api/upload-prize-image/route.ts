@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { app } from '@/lib/firebase';
+import { adminStorage } from '@/lib/firebase-admin';
 
 export async function POST(request: NextRequest) {
   try {
@@ -32,17 +31,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Initialize Firebase Storage
-    if (!app) {
-      return NextResponse.json(
-        { error: 'Firebase not initialized' },
-        { status: 500 }
-      );
-    }
-
-    const storage = getStorage(app);
-    
-    // Convert file to bytes
+    // Convert file to buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
@@ -51,26 +40,34 @@ export async function POST(request: NextRequest) {
     const extension = file.name.split('.').pop();
     const filename = `${timestamp}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
-    // Create a reference to the storage location
-    const storageRef = ref(storage, `prizes/${filename}`);
+    // Get the storage bucket
+    const bucket = adminStorage.bucket();
+    
+    // Create a file reference
+    const fileRef = bucket.file(`prizes/${filename}`);
 
-    // Upload the file to Firebase Storage
-    await uploadBytes(storageRef, buffer, {
-      contentType: file.type,
+    // Upload the file
+    await fileRef.save(buffer, {
+      metadata: {
+        contentType: file.type,
+      },
     });
 
-    // Get the download URL
-    const downloadURL = await getDownloadURL(storageRef);
+    // Make the file publicly accessible
+    await fileRef.makePublic();
+
+    // Get the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucket.name}/prizes/${filename}`;
 
     return NextResponse.json({
       success: true,
-      imagePath: downloadURL,
+      imagePath: publicUrl,
       message: 'Image uploaded successfully',
     });
   } catch (error) {
     console.error('Error uploading image:', error);
     return NextResponse.json(
-      { error: 'Failed to upload image' },
+      { error: 'Failed to upload image', details: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
     );
   }

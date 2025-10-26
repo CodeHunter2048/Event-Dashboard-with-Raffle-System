@@ -6,8 +6,8 @@ service firebase.storage {
     
     // Rules for prize images
     match /prizes/{imageId} {
-      // Allow authenticated users to read prize images
-      allow read: if request.auth != null;
+      // Allow anyone to read prize images (public access)
+      allow read: if true;
       
       // Allow authenticated users to upload prize images
       // Validate file size (max 5MB) and file type

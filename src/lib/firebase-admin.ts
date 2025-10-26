@@ -1,6 +1,7 @@
 import { initializeApp, getApps, cert } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getStorage } from 'firebase-admin/storage';
 
 // Initialize Firebase Admin SDK
 if (!getApps().length) {
@@ -24,12 +25,15 @@ if (!getApps().length) {
       throw new Error('Missing Firebase Admin SDK credentials. Set FIREBASE_SERVICE_ACCOUNT or FIREBASE_PROJECT_ID/FIREBASE_CLIENT_EMAIL/FIREBASE_PRIVATE_KEY');
     }
 
+    const storageBucket = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || `${projectId}.appspot.com`;
+
     initializeApp({
       credential: cert({
         projectId,
         clientEmail,
         privateKey,
       }),
+      storageBucket,
     });
 
     console.log('Firebase Admin SDK initialized successfully');
@@ -41,4 +45,5 @@ if (!getApps().length) {
 
 export const adminAuth = getAuth();
 export const adminDb = getFirestore();
+export const adminStorage = getStorage();
 

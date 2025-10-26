@@ -33,7 +33,7 @@ import {
 import { db } from '@/lib/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import withAuth from '@/components/withAuth';
-import { Attendee } from '@/lib/data';
+import { Attendee, Prize } from '@/lib/data';
 
 
 function Dashboard() {
@@ -41,6 +41,9 @@ function Dashboard() {
   const [checkedInCount, setCheckedInCount] = useState(0);
   const [recentCheckins, setRecentCheckins] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(true);
+  const [totalPrizesRemaining, setTotalPrizesRemaining] = useState(0);
+  const [grandPrizesRemaining, setGrandPrizesRemaining] = useState(0);
+  const [checkinsLastHour, setCheckinsLastHour] = useState(0);
 
   useEffect(() => {
     if (!db) return;
@@ -64,6 +67,7 @@ function Dashboard() {
         const data = doc.data();
         let checkInTime: string | null = null;
         if (data.checkInTime) {
+          // Handle both Timestamp and string formats
           if (data.checkInTime instanceof Timestamp) {
             checkInTime = data.checkInTime.toDate().toISOString();
           } else if (typeof data.checkInTime === 'string') {
@@ -87,10 +91,36 @@ function Dashboard() {
       setLoading(false);
     });
     
-    // Listener for checked-in count
+    // Listener for checked-in count and activity
     const checkedInQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
     const unsubscribeCheckedIn = onSnapshot(checkedInQuery, (snapshot) => {
       setCheckedInCount(snapshot.size);
+      
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      let lastHourCount = 0;
+      snapshot.forEach(doc => {
+        const checkInTime = doc.data().checkInTime;
+        if (checkInTime && checkInTime.toDate() > oneHourAgo) {
+          lastHourCount++;
+        }
+      });
+      setCheckinsLastHour(lastHourCount);
+    });
+
+    // Listener for prizes
+    const prizesQuery = query(collection(db, 'prizes'));
+    const unsubscribePrizes = onSnapshot(prizesQuery, (snapshot) => {
+        let totalRemaining = 0;
+        let grandRemaining = 0;
+        snapshot.forEach(doc => {
+            const prize = doc.data() as Prize;
+            totalRemaining += prize.remaining || 0;
+            if (prize.tier === 'Grand') {
+                grandRemaining += prize.remaining || 0;
+            }
+        });
+        setTotalPrizesRemaining(totalRemaining);
+        setGrandPrizesRemaining(grandRemaining);
     });
 
 
@@ -98,6 +128,7 @@ function Dashboard() {
       unsubscribeTotal();
       unsubscribeRecent();
       unsubscribeCheckedIn();
+      unsubscribePrizes();
     };
   }, []);
 
@@ -138,9 +169,9 @@ function Dashboard() {
             <Gift className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
+            <div className="text-2xl font-bold">{totalPrizesRemaining}</div>
             <p className="text-xs text-muted-foreground">
-              3 Grand prizes left
+              {grandPrizesRemaining} Grand prizes left
             </p>
           </CardContent>
         </Card>
@@ -152,7 +183,7 @@ function Dashboard() {
             <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+52</div>
+            <div className="text-2xl font-bold">+{checkinsLastHour}</div>
             <p className="text-xs text-muted-foreground">
               in the last hour
             </p>

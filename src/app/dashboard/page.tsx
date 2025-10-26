@@ -10,7 +10,7 @@ import {
   Gift,
   CheckCircle,
 } from 'lucide-react';
-import { collection, onSnapshot, query, where, orderBy, limit } from 'firebase/firestore';
+import { collection, onSnapshot, query, where, orderBy, limit, Timestamp } from 'firebase/firestore';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -62,6 +62,15 @@ function Dashboard() {
     const unsubscribeRecent = onSnapshot(recentCheckinsQuery, (snapshot) => {
       const checkinsData = snapshot.docs.map(doc => {
         const data = doc.data();
+        let checkInTime: string | null = null;
+        if (data.checkInTime) {
+          if (data.checkInTime instanceof Timestamp) {
+            checkInTime = data.checkInTime.toDate().toISOString();
+          } else if (typeof data.checkInTime === 'string') {
+            checkInTime = data.checkInTime;
+          }
+        }
+
         return {
           id: doc.id,
           name: data.name || '',
@@ -70,7 +79,7 @@ function Dashboard() {
           role: data.role || '',
           avatar: data.avatar || '1',
           checkedIn: data.checkedIn || false,
-          checkInTime: data.checkInTime ? new Date(data.checkInTime.seconds * 1000).toISOString() : null,
+          checkInTime: checkInTime,
           createdAt: data.createdAt,
         } as Attendee;
       });

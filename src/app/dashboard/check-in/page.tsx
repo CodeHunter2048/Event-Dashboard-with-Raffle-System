@@ -229,7 +229,7 @@ export default function CheckInPage() {
       const attendeeRef = doc(db, 'attendees', pendingAttendee.id);
       await updateDoc(attendeeRef, {
         checkedIn: true,
-        checkInTime: new Date().toISOString(),
+        checkInTime: serverTimestamp(),
       });
 
       await logScan(pendingAttendee.id, pendingAttendee.name, 'checked-in');
@@ -300,7 +300,7 @@ export default function CheckInPage() {
       const attendeeRef = doc(db, 'attendees', attendeeDoc.id);
       await updateDoc(attendeeRef, {
         checkedIn: true,
-        checkInTime: new Date().toISOString(),
+        checkInTime: serverTimestamp(),
       });
       await logScan(attendeeDoc.id, attendee.name, 'checked-in');
       setLastScan({ status: 'success', attendee: { ...attendee, checkedIn: true, checkInTime: new Date().toISOString() }, message: 'Check-in successful!' });
@@ -322,21 +322,14 @@ export default function CheckInPage() {
           </CardHeader>
           <CardContent className="flex-grow flex flex-col items-center justify-center bg-muted/20 rounded-lg m-6 mt-0">
             <div id="qr-reader" className={scanning ? 'w-full max-w-lg' : 'hidden'}></div>
-            
-            {!scanning && (
+
+            {!scanning && hasCameraPermission !== false && (
               <div className="flex flex-col items-center gap-4 text-center">
                 <Camera className="h-32 w-32 text-muted-foreground" />
-                {hasCameraPermission === false ? (
-                  <Alert variant="destructive">
-                    <AlertTitle>Camera Access Required</AlertTitle>
-                    <AlertDescription>Please allow camera access to use the scanner.</AlertDescription>
-                  </Alert>
-                ) : (
-                  <Button onClick={startScanner} size="lg" disabled={loading}>
-                    <Camera className="h-5 w-5 mr-2" />
-                    {loading ? 'Starting...' : 'Start Scanner'}
-                  </Button>
-                )}
+                <Button onClick={startScanner} size="lg" disabled={loading}>
+                  <Camera className="h-5 w-5 mr-2" />
+                  {loading ? 'Starting...' : 'Start Scanner'}
+                </Button>
               </div>
             )}
             
@@ -345,6 +338,15 @@ export default function CheckInPage() {
                 <CameraOff className="h-5 w-5 mr-2" />
                 Stop Scanner
               </Button>
+            )}
+
+            {hasCameraPermission === false && (
+              <Alert variant="destructive">
+                <AlertTitle>Camera Access Required</AlertTitle>
+                <AlertDescription>
+                  Please allow camera access to use this feature. You may need to refresh the page after granting permission.
+                </AlertDescription>
+              </Alert>
             )}
           </CardContent>
         </Card>

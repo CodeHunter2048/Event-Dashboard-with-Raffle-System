@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,6 +11,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -19,57 +29,397 @@ import {
   QrCode,
   ScanLine,
   XCircle,
+  Camera,
+  CameraOff,
 } from 'lucide-react';
-import { Attendee, attendees } from '@/lib/data';
+import { Attendee } from '@/lib/data';
+import { useToast } from '@/hooks/use-toast';
+import { db } from '@/lib/firebase';
+import { 
+  collection, 
+  doc,
+  getDoc,
+  updateDoc,
+  addDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs
+} from 'firebase/firestore';
+import { Html5Qrcode } from 'html5-qrcode';
 
 type ScanStatus = 'success' | 'error' | 'duplicate' | 'idle';
 
+interface ScanLog {
+  attendeeId: string;
+  attendeeName: string;
+  scannedBy: string;
+  scannedAt: any;
+  action: 'checked-in' | 'already-checked-in' | 'not-found';
+}
+
 export default function CheckInPage() {
+  const { toast } = useToast();
   const [lastScan, setLastScan] = useState<{
     status: ScanStatus;
     attendee: Attendee | null;
     message: string;
   }>({ status: 'idle', attendee: null, message: 'Scan an attendee QR code to begin' });
+  
+  const [pendingAttendee, setPendingAttendee] = useState<Attendee | null>(null);
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [cameraError, setCameraError] = useState<string>('');
+  const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
+  const currentUser = 'Admin'; // In real app, get from auth context
 
-  const handleManualCheckin = (event: React.FormEvent<HTMLFormElement>) => {
+  // Initialize scanner
+  useEffect(() => {
+    return () => {
+      // Cleanup on unmount
+      if (html5QrCodeRef.current && scanning) {
+        html5QrCodeRef.current.stop().catch(console.error);
+      }
+    };
+  }, [scanning]);
+
+  const startScanner = async () => {
+    try {
+      setCameraError('');
+      setLoading(true);
+      setScanning(true);
+      
+      // Wait for React to render the qr-reader div
+      await new Promise(resolve => setTimeout(resolve, 300));
+      
+      // Check if element exists
+      const element = document.getElementById('qr-reader');
+      if (!element) {
+        throw new Error('Scanner element not found in DOM');
+      }
+      
+      const html5QrCode = new Html5Qrcode('qr-reader');
+      html5QrCodeRef.current = html5QrCode;
+
+      const config = {
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0,
+      };
+
+      await html5QrCode.start(
+        { facingMode: 'environment' },
+        config,
+        async (decodedText) => {
+          // QR code detected - stop scanner and process
+          if (html5QrCodeRef.current) {
+            await html5QrCodeRef.current.stop();
+            setScanning(false);
+            await handleQRCodeScan(decodedText);
+          }
+        },
+        (errorMessage) => {
+          // Ignore continuous scanning errors (this fires constantly while scanning)
+        }
+      );
+
+      setLoading(false);
+
+    } catch (error: any) {
+      console.error('Error starting scanner:', error);
+      setScanning(false);
+      setLoading(false);
+      setCameraError(error.message || 'Failed to access camera');
+      toast({
+        variant: 'destructive',
+        title: 'Camera Error',
+        description: 'Could not access camera. Please check permissions and ensure you are using HTTPS or localhost.',
+      });
+    }
+  };
+
+  const stopScanner = async () => {
+    if (html5QrCodeRef.current) {
+      try {
+        await html5QrCodeRef.current.stop();
+        setScanning(false);
+      } catch (error) {
+        console.error('Error stopping scanner:', error);
+      }
+    }
+  };
+
+  const handleQRCodeScan = async (attendeeId: string) => {
+    if (!db) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Database not initialized.',
+      });
+      return;
+    }
+
+    try {
+      // Fetch attendee from Firestore
+      const attendeeRef = doc(db, 'attendees', attendeeId);
+      const attendeeDoc = await getDoc(attendeeRef);
+
+      if (!attendeeDoc.exists()) {
+        setLastScan({ 
+          status: 'error', 
+          attendee: null, 
+          message: `Invalid QR Code: Attendee not found.` 
+        });
+        
+        // Log failed scan
+        await logScan(attendeeId, 'Unknown', 'not-found');
+        
+        toast({
+          variant: 'destructive',
+          title: 'Not Found',
+          description: 'Attendee not found in database.',
+        });
+        
+        // Restart scanner after delay
+        setTimeout(() => startScanner(), 3000);
+        return;
+      }
+
+      const attendeeData = attendeeDoc.data() as Attendee;
+      const attendee: Attendee = {
+        ...attendeeData,
+        id: attendeeDoc.id,
+      };
+
+      // Check if already checked in
+      if (attendee.checkedIn) {
+        setLastScan({ 
+          status: 'duplicate', 
+          attendee, 
+          message: `Already checked in at ${new Date(attendee.checkInTime!).toLocaleString()}` 
+        });
+        
+        // Log duplicate scan
+        await logScan(attendeeDoc.id, attendee.name, 'already-checked-in');
+        
+        toast({
+          variant: 'default',
+          title: 'Already Checked In',
+          description: `${attendee.name} was already checked in.`,
+        });
+        
+        // Restart scanner after delay
+        setTimeout(() => startScanner(), 3000);
+        return;
+      }
+
+      // Show confirmation dialog
+      setPendingAttendee(attendee);
+      setConfirmDialogOpen(true);
+
+    } catch (error: any) {
+      console.error('Error processing QR code:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to process QR code.',
+      });
+      
+      // Restart scanner
+      setTimeout(() => startScanner(), 3000);
+    }
+  };
+
+  const confirmCheckIn = async () => {
+    if (!pendingAttendee || !db) return;
+
+    try {
+      // Update attendee status
+      const attendeeRef = doc(db, 'attendees', pendingAttendee.id);
+      await updateDoc(attendeeRef, {
+        checkedIn: true,
+        checkInTime: new Date().toISOString(),
+      });
+
+      // Log successful check-in
+      await logScan(pendingAttendee.id, pendingAttendee.name, 'checked-in');
+
+      setLastScan({ 
+        status: 'success', 
+        attendee: { ...pendingAttendee, checkedIn: true, checkInTime: new Date().toISOString() }, 
+        message: 'Check-in successful!' 
+      });
+
+      toast({
+        title: 'Success',
+        description: `${pendingAttendee.name} checked in successfully!`,
+      });
+
+      setConfirmDialogOpen(false);
+      setPendingAttendee(null);
+
+      // Restart scanner after delay
+      setTimeout(() => startScanner(), 2000);
+
+    } catch (error: any) {
+      console.error('Error checking in attendee:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to check in attendee.',
+      });
+    }
+  };
+
+  const cancelCheckIn = () => {
+    setConfirmDialogOpen(false);
+    setPendingAttendee(null);
+    
+    // Restart scanner
+    setTimeout(() => startScanner(), 500);
+  };
+
+  const logScan = async (attendeeId: string, attendeeName: string, action: 'checked-in' | 'already-checked-in' | 'not-found') => {
+    if (!db) return;
+
+    try {
+      await addDoc(collection(db, 'scanlogs'), {
+        attendeeId,
+        attendeeName,
+        scannedBy: currentUser,
+        scannedAt: serverTimestamp(),
+        action,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Error logging scan:', error);
+    }
+  };
+
+  const handleManualCheckin = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
+    
+    if (!db) {
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: 'Database not initialized.',
+      });
+      return;
+    }
+
     const formData = new FormData(event.currentTarget);
     const id = formData.get('attendeeId') as string;
-    const attendee = attendees.find(a => a.id.toLowerCase() === id.toLowerCase());
 
-    if (!attendee) {
-      setLastScan({ status: 'error', attendee: null, message: `Invalid ID: Attendee with ID "${id}" not found.` });
-      return;
-    }
+    try {
+      // Search for attendee by ID
+      const attendeesRef = collection(db, 'attendees');
+      const q = query(attendeesRef, where('__name__', '==', id));
+      const querySnapshot = await getDocs(q);
 
-    if (attendee.checkedIn) {
-      setLastScan({ status: 'duplicate', attendee, message: `Already checked in at ${new Date(attendee.checkInTime!).toLocaleTimeString()}` });
-      return;
+      if (querySnapshot.empty) {
+        setLastScan({ 
+          status: 'error', 
+          attendee: null, 
+          message: `Invalid ID: Attendee with ID "${id}" not found.` 
+        });
+        await logScan(id, 'Unknown', 'not-found');
+        return;
+      }
+
+      const attendeeDoc = querySnapshot.docs[0];
+      const attendeeData = attendeeDoc.data() as Attendee;
+      const attendee: Attendee = {
+        ...attendeeData,
+        id: attendeeDoc.id,
+      };
+
+      if (attendee.checkedIn) {
+        setLastScan({ 
+          status: 'duplicate', 
+          attendee, 
+          message: `Already checked in at ${new Date(attendee.checkInTime!).toLocaleString()}` 
+        });
+        await logScan(attendeeDoc.id, attendee.name, 'already-checked-in');
+        return;
+      }
+
+      // Update check-in status
+      const attendeeRef = doc(db, 'attendees', attendeeDoc.id);
+      await updateDoc(attendeeRef, {
+        checkedIn: true,
+        checkInTime: new Date().toISOString(),
+      });
+
+      // Log check-in
+      await logScan(attendeeDoc.id, attendee.name, 'checked-in');
+      
+      setLastScan({ 
+        status: 'success', 
+        attendee: { ...attendee, checkedIn: true, checkInTime: new Date().toISOString() }, 
+        message: 'Check-in successful!' 
+      });
+
+      toast({
+        title: 'Success',
+        description: `${attendee.name} checked in successfully!`,
+      });
+
+      // Reset form
+      event.currentTarget.reset();
+
+    } catch (error: any) {
+      console.error('Error with manual check-in:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Error',
+        description: error.message || 'Failed to check in attendee.',
+      });
     }
-    
-    // In a real app, you'd update the backend here.
-    attendee.checkedIn = true;
-    attendee.checkInTime = new Date().toISOString();
-    setLastScan({ status: 'success', attendee, message: 'Check-in successful!' });
   };
 
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
-      <Card className="flex flex-col">
-        <CardHeader>
-          <CardTitle>QR Code Scanner</CardTitle>
-          <CardDescription>
-            Point the camera at an attendee's QR code.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex-grow flex items-center justify-center bg-muted/20 rounded-lg m-6 mt-0">
-          <div className="flex flex-col items-center gap-4 text-center text-muted-foreground animate-pulse">
-            <ScanLine className="h-32 w-32" />
-            <p>Ready to Scan</p>
-          </div>
-        </CardContent>
-      </Card>
+    <>
+      <div className="grid gap-6 lg:grid-cols-2">
+        <Card className="flex flex-col">
+          <CardHeader>
+            <CardTitle>QR Code Scanner</CardTitle>
+            <CardDescription>
+              Point the camera at an attendee's QR code.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex-grow flex flex-col items-center justify-center bg-muted/20 rounded-lg m-6 mt-0">
+            {!scanning ? (
+              <div className="flex flex-col items-center gap-4 text-center">
+                <Camera className="h-32 w-32 text-muted-foreground" />
+                <Button onClick={startScanner} size="lg" disabled={loading}>
+                  <Camera className="h-5 w-5 mr-2" />
+                  {loading ? 'Starting...' : 'Start Scanner'}
+                </Button>
+                {cameraError && (
+                  <p className="text-sm text-destructive">{cameraError}</p>
+                )}
+              </div>
+            ) : (
+              <div className="w-full flex flex-col items-center gap-4 p-4">
+                {loading && (
+                  <div className="flex flex-col items-center gap-2 mb-4">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    <p className="text-sm text-muted-foreground">Initializing camera...</p>
+                  </div>
+                )}
+                <div id="qr-reader" className="w-full max-w-lg"></div>
+                <Button onClick={stopScanner} variant="destructive" size="lg" className="mt-4">
+                  <CameraOff className="h-5 w-5 mr-2" />
+                  Stop Scanner
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
       <div className="space-y-6">
         <Card>
@@ -132,5 +482,46 @@ export default function CheckInPage() {
         </Card>
       </div>
     </div>
+
+    {/* Confirmation Dialog */}
+    <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirm Check-In</AlertDialogTitle>
+          <AlertDialogDescription>
+            Please verify the attendee information before confirming check-in.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        {pendingAttendee && (
+          <div className="py-4 space-y-3">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-muted-foreground">Name:</span>
+                <span className="text-lg font-bold">{pendingAttendee.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-muted-foreground">Organization:</span>
+                <span className="text-base">{pendingAttendee.organization}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-muted-foreground">Role:</span>
+                <span className="text-base">{pendingAttendee.role}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-muted-foreground">ID:</span>
+                <span className="text-sm font-mono">{pendingAttendee.id}</span>
+              </div>
+            </div>
+          </div>
+        )}
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={cancelCheckIn}>Cancel</AlertDialogCancel>
+          <AlertDialogAction onClick={confirmCheckIn}>
+            Confirm Check-In
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  </>
   );
 }

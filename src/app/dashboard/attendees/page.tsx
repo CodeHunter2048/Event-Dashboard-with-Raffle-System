@@ -375,65 +375,29 @@ export default function AttendeesPage() {
       format: [210, 80] // Wider and shorter for paper conservation
     });
     
-    // Generate QR Code with validation
-    let qrCodeDataURL = '';
-    try {
-      qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-        width: 200,
-        margin: 1,
-        color: {
-          dark: '#2B5F6F', // Deep Teal Blue
-          light: '#FFFFFF'
-        }
-      });
-      
-      // Validate QR code data URL
-      if (!qrCodeDataURL || !qrCodeDataURL.startsWith('data:image/')) {
-        throw new Error('Invalid QR code data URL');
+    // Generate QR Code
+    const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+      width: 200,
+      margin: 1,
+      color: {
+        dark: '#2B5F6F', // Deep Teal Blue
+        light: '#FFFFFF'
       }
-    } catch (error) {
-      console.error('Failed to generate QR code:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to generate QR code for ticket.',
-      });
-      return;
-    }
+    });
 
-    // Load logo image with proper validation
-    // In Next.js, we need to use the correct path for images in src/app
-    const logoUrl = '/logo.png'; // This will look in the public folder
+    // Load logo image
+    const logoUrl = '/aioria-logo.png'; // Adjust path if needed
     let logoDataURL = '';
     try {
       const response = await fetch(logoUrl);
-      if (!response.ok) {
-        throw new Error('Failed to fetch logo');
-      }
       const blob = await response.blob();
-      
-      // Validate it's a valid image blob
-      if (!blob.type.startsWith('image/')) {
-        throw new Error('Invalid image type');
-      }
-      
-      logoDataURL = await new Promise<string>((resolve, reject) => {
+      logoDataURL = await new Promise<string>((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Validate the data URL format
-          if (result && result.startsWith('data:image/')) {
-            resolve(result);
-          } else {
-            reject(new Error('Invalid data URL format'));
-          }
-        };
-        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(blob);
       });
     } catch (error) {
-      console.warn('Logo could not be loaded, continuing without it:', error);
-      logoDataURL = ''; // Ensure it's empty on error
+      console.warn('Logo could not be loaded, continuing without it');
     }
 
     // Cream/Beige Background
@@ -448,14 +412,9 @@ export default function AttendeesPage() {
     doc.setFillColor('#D4833C');
     doc.rect(8, 0, 2, 80, 'F');
 
-    // Logo (if loaded) - add with error handling
+    // Logo (if loaded)
     if (logoDataURL) {
-      try {
-        doc.addImage(logoDataURL, 'PNG', 15, 12, 25, 25);
-      } catch (error) {
-        console.error('Failed to add logo to ticket:', error);
-        // Continue without logo
-      }
+      doc.addImage(logoDataURL, 'PNG', 15, 12, 25, 25);
     }
 
     // Event Branding Section (shifted right if logo present)
@@ -513,25 +472,15 @@ export default function AttendeesPage() {
     doc.setTextColor('#A4464B'); // Burgundy Red
     doc.text(attendee.organization, 15, 72, { maxWidth: 80 });
 
-    // QR Code Section (Right Side) - add with error handling
-    try {
-      doc.addImage(qrCodeDataURL, 'PNG', 155, 15, 45, 45);
-      
-      doc.setFontSize(7);
-      doc.setTextColor('#666666');
-      doc.setFont('helvetica', 'normal');
-      const qrText = 'Scan for Check-in';
-      const qrTextWidth = doc.getTextWidth(qrText);
-      doc.text(qrText, 177.5 - (qrTextWidth / 2), 65);
-    } catch (error) {
-      console.error('Failed to add QR code to ticket:', error);
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'Failed to add QR code to ticket.',
-      });
-      return;
-    }
+    // QR Code Section (Right Side)
+    doc.addImage(qrCodeDataURL, 'PNG', 155, 15, 45, 45);
+    
+    doc.setFontSize(7);
+    doc.setTextColor('#666666');
+    doc.setFont('helvetica', 'normal');
+    const qrText = 'Scan for Check-in';
+    const qrTextWidth = doc.getTextWidth(qrText);
+    doc.text(qrText, 177.5 - (qrTextWidth / 2), 65);
 
     // Burgundy decorative corner
     doc.setFillColor('#A4464B');
@@ -548,39 +497,19 @@ export default function AttendeesPage() {
       format: 'a4'
     });
 
-    // Load logo image once with proper validation
-    // In Next.js, we need to use the correct path for images in src/app
-    const logoUrl = '/logo.png'; // This will look in the public folder
+    // Load logo image once
+    const logoUrl = '/aioria-logo.png';
     let logoDataURL = '';
     try {
       const response = await fetch(logoUrl);
-      if (!response.ok) {
-        throw new Error('Failed to fetch logo');
-      }
       const blob = await response.blob();
-      
-      // Validate it's a valid image blob
-      if (!blob.type.startsWith('image/')) {
-        throw new Error('Invalid image type');
-      }
-      
-      logoDataURL = await new Promise<string>((resolve, reject) => {
+      logoDataURL = await new Promise<string>((resolve) => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          const result = reader.result as string;
-          // Validate the data URL format
-          if (result && result.startsWith('data:image/')) {
-            resolve(result);
-          } else {
-            reject(new Error('Invalid data URL format'));
-          }
-        };
-        reader.onerror = () => reject(new Error('Failed to read image'));
+        reader.onloadend = () => resolve(reader.result as string);
         reader.readAsDataURL(blob);
       });
     } catch (error) {
-      console.warn('Logo could not be loaded, continuing without it:', error);
-      logoDataURL = ''; // Ensure it's empty on error
+      console.warn('Logo could not be loaded, continuing without it');
     }
 
     const ticketWidth = 190;
@@ -600,27 +529,14 @@ export default function AttendeesPage() {
       }
       isFirstTicket = false;
 
-      // Generate QR code with validation
-      let qrCodeDataURL = '';
-      try {
-        qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-          width: 180,
-          margin: 1,
-          color: {
-            dark: '#2B5F6F',
-            light: '#FFFFFF'
-          }
-        });
-        
-        // Validate QR code data URL
-        if (!qrCodeDataURL || !qrCodeDataURL.startsWith('data:image/')) {
-          throw new Error('Invalid QR code data URL');
+      const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
+        width: 180,
+        margin: 1,
+        color: {
+          dark: '#2B5F6F',
+          light: '#FFFFFF'
         }
-      } catch (error) {
-        console.error(`Failed to generate QR code for attendee ${attendee.name}:`, error);
-        // Continue without QR code for this attendee
-        qrCodeDataURL = '';
-      }
+      });
       
       // Cream/Beige Background
       doc.setFillColor('#F5F1E3');
@@ -634,14 +550,9 @@ export default function AttendeesPage() {
       doc.setFillColor('#D4833C');
       doc.rect(pageMargin + 7, y, 1.5, ticketHeight, 'F');
 
-      // Logo (if loaded) - add with error handling
+      // Logo (if loaded)
       if (logoDataURL) {
-        try {
-          doc.addImage(logoDataURL, 'PNG', pageMargin + 12, y + 8, 20, 20);
-        } catch (error) {
-          console.error('Failed to add logo to ticket:', error);
-          // Continue without logo
-        }
+        doc.addImage(logoDataURL, 'PNG', pageMargin + 12, y + 8, 20, 20);
       }
 
       // Event Branding (shifted right if logo present)
@@ -699,21 +610,14 @@ export default function AttendeesPage() {
       doc.setTextColor('#A4464B');
       doc.text(attendee.organization, pageMargin + 12, y + 60, { maxWidth: 75 });
 
-      // QR Code - add with error handling
-      if (qrCodeDataURL) {
-        try {
-          doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 145, y + 12, 40, 40);
-          
-          doc.setFontSize(6);
-          doc.setTextColor('#666666');
-          const qrText = 'Scan for Check-in';
-          const qrTextWidth = doc.getTextWidth(qrText);
-          doc.text(qrText, pageMargin + 165 - (qrTextWidth / 2), y + 56);
-        } catch (error) {
-          console.error(`Failed to add QR code for attendee ${attendee.name}:`, error);
-          // Continue without QR code
-        }
-      }
+      // QR Code
+      doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 145, y + 12, 40, 40);
+      
+      doc.setFontSize(6);
+      doc.setTextColor('#666666');
+      const qrText = 'Scan for Check-in';
+      const qrTextWidth = doc.getTextWidth(qrText);
+      doc.text(qrText, pageMargin + 165 - (qrTextWidth / 2), y + 56);
 
       // Decorative corners
       doc.setFillColor('#A4464B');

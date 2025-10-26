@@ -386,7 +386,7 @@ export default function AttendeesPage() {
     });
 
     // Load logo image
-    const logoUrl = '/aioria-logo.png'; // Adjust path if needed
+    const logoUrl = '/logo.png'; // Fixed: Changed from aioria-logo.png to logo.png
     let logoDataURL = '';
     try {
       const response = await fetch(logoUrl);
@@ -498,7 +498,7 @@ export default function AttendeesPage() {
     });
 
     // Load logo image once
-    const logoUrl = '/aioria-logo.png';
+    const logoUrl = '/logo.png'; // Fixed: Changed from aioria-logo.png to logo.png
     let logoDataURL = '';
     try {
       const response = await fetch(logoUrl);

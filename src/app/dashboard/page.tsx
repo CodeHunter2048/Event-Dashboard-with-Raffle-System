@@ -100,8 +100,20 @@ function Dashboard() {
       let lastHourCount = 0;
       snapshot.forEach(doc => {
         const checkInTime = doc.data().checkInTime;
-        if (checkInTime && checkInTime.toDate() > oneHourAgo) {
-          lastHourCount++;
+        if (checkInTime) {
+          // Handle both Timestamp and string formats
+          let checkInDate: Date;
+          if (checkInTime instanceof Timestamp) {
+            checkInDate = checkInTime.toDate();
+          } else if (typeof checkInTime === 'string') {
+            checkInDate = new Date(checkInTime);
+          } else {
+            return; // Skip if format is unexpected
+          }
+          
+          if (checkInDate > oneHourAgo) {
+            lastHourCount++;
+          }
         }
       });
       setCheckinsLastHour(lastHourCount);

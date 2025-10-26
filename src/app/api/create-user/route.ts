@@ -1,32 +1,9 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, cert, getApps, getApp, App } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
-import { FirestorePermissionError } from '@/firebase/errors';
-import { errorEmitter } from '@/firebase/error-emitter';
+import { adminAuth as auth, adminDb as db } from '@/lib/firebase-admin';
 
-let adminApp: App;
-if (!getApps().some(app => app.name === 'admin')) {
-    // Use environment variable for Vercel deployment
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT 
-        ? JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
-        : require('../../../../serviceAccountKey.json'); // Fallback for local development
-    
-    adminApp = initializeApp({
-        credential: cert({
-            projectId: serviceAccount.project_id,
-            clientEmail: serviceAccount.client_email,
-            privateKey: serviceAccount.private_key?.replace(/\\n/g, '\n'),
-        })
-    }, 'admin');
-} else {
-    adminApp = getApp('admin');
-}
-
-
-const auth = getAuth(adminApp);
-const db = getFirestore(adminApp);
+// Force Node.js runtime on Vercel; firebase-admin is not supported on Edge
+export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
     try {

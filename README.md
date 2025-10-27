@@ -376,8 +376,8 @@ This project was created as a rapid prototype with AI assistance. Contributions 
 ## 🙏 Acknowledgments
 
 This project was developed with the assistance of multiple AI tools:
-- **Claude Sonnet 3.5** for architectural planning and code generation
-- **Gemini 2.0 Flash (Firebase Studio)** for design and UI components
+- **Claude Sonnet 4.5** for architectural planning and code generation
+- **Gemini 2.5 (Firebase Studio)** for design and UI components
 - **GitHub Copilot** for code completion and suggestions
 - **ChatGPT** for guidance and problem-solving
 

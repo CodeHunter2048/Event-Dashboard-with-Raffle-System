@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit } from 'firebase/firestore';
+import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
@@ -90,76 +90,117 @@ export default function DrawingPage() {
     };
   }, [toast]);
 
-  // Fetches all necessary data from Firestore on initial load
-  const fetchData = useCallback(async () => {
-    setIsLoading(true);
-    
-    // Create a timeout promise to prevent hanging when offline
-    const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('Fetch timeout')), 10000); // 10 second timeout
-    });
-    
-    try {
-      // Race between data fetch and timeout
-      await Promise.race([
-        (async () => {
-          // 1. Fetch all prizes
-          const database = db!; // Firestore available in client
-          const prizesQuery = query(collection(database, 'prizes'), orderBy('name'));
-          const prizesSnapshot = await getDocs(prizesQuery);
-          const prizesData = prizesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
-          setAllPrizes(prizesData);
-
-          // 2. Fetch all checked-in attendees
-          const attendeesQuery = query(collection(database, 'attendees'), where('checkedIn', '==', true));
-          const attendeesSnapshot = await getDocs(attendeesQuery);
-          const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
-
-          // 3. Fetch all past winners to determine who is ineligible
-          const winnersQuery = query(collection(database, 'winners'));
-          const winnersSnapshot = await getDocs(winnersQuery);
-          const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
-          
-          // 4. Calculate the eligible pool
-          const eligibleAttendees = checkedInAttendees.filter(attendee => !winnerAttendeeIds.has(attendee.id));
-          setEligiblePool(eligibleAttendees);
-          
-          // 5. Fetch recent winners for display
-          const recentWinnersQuery = query(collection(database, 'winners'), orderBy('timestamp', 'desc'), limit(10));
-          const recentWinnersSnapshot = await getDocs(recentWinnersQuery);
-          const recentWinnersData = recentWinnersSnapshot.docs.map(doc => {
-            const data = doc.data();
-            const attendee = checkedInAttendees.find(a => a.id === data.attendeeId) || { id: data.attendeeId, name: data.attendeeName, organization: data.attendeeOrganization, avatar: 1, checkedIn: true };
-            const prize = prizesData.find(p => p.id === data.prizeId) || { id: data.prizeId, name: data.prizeName, tier: 'Unknown', remaining: 0, quantity: 0, description: '' };
-            return { attendee, prize, timestamp: new Date(data.timestamp?.toDate()).toISOString() };
-          }) as Winner[];
-          setWinnersList(recentWinnersData);
-        })(),
-        timeoutPromise
-      ]);
-
-    } catch (error: any) {
-      if (error.message === 'Fetch timeout') {
-        console.warn("Data fetch timed out - using cached data");
-        if (!isOnline) {
-          toast({ 
-            title: "Using Cached Data", 
-            description: "Loading from local cache. Connect to internet for latest updates.",
-            variant: "default"
-          });
-        }
-      } else {
-        console.error("Error fetching data:", error);
-        toast({ title: "Error", description: "Failed to load raffle data from the database.", variant: "destructive" });
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  }, [toast, isOnline]);
-
+  // Set up real-time listeners for all data
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (!db) return;
+
+    setIsLoading(true);
+    const database = db;
+
+    // Real-time listener for prizes
+    const prizesQuery = query(collection(database, 'prizes'), orderBy('name'));
+    const unsubscribePrizes = onSnapshot(
+      prizesQuery,
+      (snapshot) => {
+        const prizesData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
+        setAllPrizes(prizesData);
+      },
+      (error) => {
+        console.error("Error fetching prizes:", error);
+        if (error.code !== 'permission-denied') {
+          toast({ title: "Error", description: "Failed to load prizes.", variant: "destructive" });
+        }
+      }
+    );
+
+    // Real-time listener for checked-in attendees and winners (to calculate eligible pool)
+    const attendeesQuery = query(collection(database, 'attendees'), where('checkedIn', '==', true));
+    const winnersQuery = query(collection(database, 'winners'));
+
+    const unsubscribeAttendees = onSnapshot(
+      attendeesQuery,
+      (attendeesSnapshot) => {
+        const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
+
+        // Also listen to winners to calculate eligible pool
+        const unsubscribeWinners = onSnapshot(
+          winnersQuery,
+          (winnersSnapshot) => {
+            const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
+            const eligibleAttendees = checkedInAttendees.filter(attendee => !winnerAttendeeIds.has(attendee.id));
+            setEligiblePool(eligibleAttendees);
+            setIsLoading(false);
+          },
+          (error) => {
+            console.error("Error fetching winners for eligible pool:", error);
+            if (error.code !== 'permission-denied') {
+              setIsLoading(false);
+            }
+          }
+        );
+
+        return unsubscribeWinners;
+      },
+      (error) => {
+        console.error("Error fetching attendees:", error);
+        if (error.code !== 'permission-denied') {
+          toast({ title: "Error", description: "Failed to load attendees.", variant: "destructive" });
+        }
+        setIsLoading(false);
+      }
+    );
+
+    // Real-time listener for recent winners display
+    const recentWinnersQuery = query(collection(database, 'winners'), orderBy('timestamp', 'desc'), limit(10));
+    const unsubscribeRecentWinners = onSnapshot(
+      recentWinnersQuery,
+      (winnersSnapshot) => {
+        // Get current prizes and attendees to map winner data
+        const winnersData = winnersSnapshot.docs.map(doc => {
+          const data = doc.data();
+          
+          // Use data from the winner doc itself for display
+          const attendee: Attendee = { 
+            id: data.attendeeId, 
+            name: data.attendeeName || 'Unknown', 
+            organization: data.attendeeOrganization || '', 
+            avatar: data.attendeeAvatar || 1, 
+            checkedIn: true 
+          };
+          
+          const prize: Prize = { 
+            id: data.prizeId, 
+            name: data.prizeName || 'Unknown Prize', 
+            tier: data.prizeTier || 'Unknown', 
+            remaining: 0, 
+            quantity: 0, 
+            description: data.prizeDescription || '' 
+          };
+          
+          return { 
+            attendee, 
+            prize, 
+            timestamp: data.timestamp?.toDate ? new Date(data.timestamp.toDate()).toISOString() : new Date().toISOString() 
+          };
+        }) as Winner[];
+        
+        setWinnersList(winnersData);
+      },
+      (error) => {
+        console.error("Error fetching recent winners:", error);
+        if (error.code !== 'permission-denied') {
+          toast({ title: "Error", description: "Failed to load recent winners.", variant: "destructive" });
+        }
+      }
+    );
+
+    // Cleanup all listeners on unmount
+    return () => {
+      unsubscribePrizes();
+      unsubscribeAttendees();
+      unsubscribeRecentWinners();
+    };
+  }, [toast]);
 
   const handlePrizeChange = (prizeId: string) => {
     const prize = allPrizes.find(p => p.id === prizeId);
@@ -221,8 +262,11 @@ export default function DrawingPage() {
         attendeeId: winner.id,
         attendeeName: winner.name,
         attendeeOrganization: winner.organization,
+        attendeeAvatar: winner.avatar,
         prizeId: selectedPrize.id,
         prizeName: selectedPrize.name,
+        prizeTier: selectedPrize.tier,
+        prizeDescription: selectedPrize.description,
         timestamp: serverTimestamp(),
         claimed: false,
       });
@@ -265,11 +309,9 @@ export default function DrawingPage() {
       
       setIsConfirmed(true);
       
-      // Only fetch from server if online to refresh data
+      // Data will auto-sync via real-time listeners
       if (isOnline) {
         setPendingSync(false);
-        // Fetch in background without blocking UI
-        fetchData().catch(err => console.error("Background fetch error:", err));
       }
 
     } catch (error) {

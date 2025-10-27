@@ -84,8 +84,11 @@ export function useAuth() {
               role: 'attendee',
             });
           }
-        } catch (error) {
-          console.error('Error fetching user account:', error);
+        } catch (error: any) {
+          // Only log errors that aren't permission-denied (expected when not logged in)
+          if (error?.code !== 'permission-denied') {
+            console.error('Error fetching user account:', error);
+          }
         }
       } else {
         setUserAccount(null);

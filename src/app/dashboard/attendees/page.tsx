@@ -464,9 +464,9 @@ export default function AttendeesPage() {
   doc.setTextColor('#A4464B'); // Burgundy Red
   doc.text('IA', iaX, titleY);
 
-  // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9); // slightly larger but same position
+    // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
     doc.setTextColor('#2B5F6F'); // Deep Teal Blue
     doc.text('UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE', textStartX, 21);
 
@@ -481,15 +481,15 @@ export default function AttendeesPage() {
     doc.setTextColor('#666666');
     doc.text(`ID: ${attendee.id.substring(0, 12)}...`, 12, 31);
 
-  doc.setFontSize(13); // a little larger
+    doc.setFontSize(14);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor('#2B5F6F'); // Deep Teal Blue
-  doc.text(attendee.name, 12, 39, { maxWidth: 75 }); // a little lower
+    doc.text(attendee.name, 12, 39, { maxWidth: 75 });
 
-  doc.setFontSize(8);
+    doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor('#A4464B'); // Burgundy Red
-  doc.text(attendee.organization, 12, 46, { maxWidth: 75 }); // adjust to maintain spacing
+    doc.text(attendee.organization, 12, 43, { maxWidth: 75 });
 
     // QR Code Section (Right Side)
     doc.addImage(qrCodeDataURL, 'PNG', 165, 8, 35, 35);
@@ -611,22 +611,22 @@ export default function AttendeesPage() {
   doc.setTextColor('#A4464B');
   doc.text('IA', iaXSmall, titleYSmall);
 
-  // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.2); // slightly larger but same baseline
+      // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(7);
       doc.setTextColor('#2B5F6F');
       doc.text('UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE', textStartX, y + 14);
 
       // Attendee Info
-  doc.setFontSize(9); // a little larger
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
       doc.setTextColor('#2B5F6F');
-  doc.text(attendee.name, pageMargin + 8, y + 21, { maxWidth: 115 }); // a little lower
+      doc.text(attendee.name, pageMargin + 8, y + 21, { maxWidth: 115 });
 
-  doc.setFontSize(6);
+      doc.setFontSize(6);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor('#A4464B');
-  doc.text(attendee.organization, pageMargin + 8, y + 26, { maxWidth: 115 }); // maintain spacing
+      doc.text(attendee.organization, pageMargin + 8, y + 24, { maxWidth: 115 });
 
       // QR Code
       doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 165, y + 4, 20, 20);

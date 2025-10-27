@@ -5,9 +5,9 @@ A comprehensive event management system built with Next.js, Firebase, and modern
 > **Development Timeline:** Created within 5 days with AI assistance
 > 
 > **AI Tools Used:**
-> - **Claude Sonnet 3.5** - Initial project flow and ideation
-> - **Firebase Studio IDE with Gemini 2.0 Flash** - UI/UX design and architecture
-> - **Claude Sonnet 3.5 via GitHub Copilot** - Code implementation in VS Code
+> - **Claude Sonnet 4.5** - Initial project flow and ideation
+> - **Firebase Studio IDE with Gemini 2.5 Flash** - UI/UX design and architecture
+> - **Claude Sonnet 4.5 via GitHub Copilot** - Code implementation in VS Code
 > - **ChatGPT** - Development guidance and problem-solving
 
 ## 📋 Table of Contents

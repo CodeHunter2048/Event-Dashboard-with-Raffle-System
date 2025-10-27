@@ -393,12 +393,12 @@ export default function AttendeesPage() {
     const doc = new jsPDF({
       orientation: 'landscape',
       unit: 'mm',
-      format: [210, 80] // Wider and shorter for paper conservation
+      format: [210, 50] // Smaller height to fit more tickets
     });
     
     // Generate QR Code
     const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-      width: 200,
+      width: 150,
       margin: 1,
       color: {
         dark: '#2B5F6F', // Deep Teal Blue
@@ -423,90 +423,88 @@ export default function AttendeesPage() {
 
     // Cream/Beige Background
     doc.setFillColor('#F5F1E3');
-    doc.rect(0, 0, 210, 80, 'F');
+    doc.rect(0, 0, 210, 50, 'F');
 
     // Deep Teal Blue accent bar on left
     doc.setFillColor('#2B5F6F');
-    doc.rect(0, 0, 8, 80, 'F');
+    doc.rect(0, 0, 6, 50, 'F');
 
     // Warm Orange decorative line
     doc.setFillColor('#D4833C');
-    doc.rect(8, 0, 2, 80, 'F');
+    doc.rect(6, 0, 1.5, 50, 'F');
 
     // Logo (if loaded)
     if (logoDataURL) {
-      doc.addImage(logoDataURL, 'PNG', 15, 12, 25, 25);
+      doc.addImage(logoDataURL, 'PNG', 12, 5, 18, 18);
     }
 
     // Event Branding Section (shifted right if logo present)
-    const textStartX = logoDataURL ? 45 : 15;
+    const textStartX = logoDataURL ? 33 : 12;
     
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(18);
-    doc.setTextColor('#2B5F6F'); // Deep Teal Blue
-    doc.text('AI', textStartX, 20);
-    
-    doc.setFontSize(14);
-    doc.setTextColor('#D4833C'); // Warm Orange
-    doc.text('FOR', textStartX + 15, 20);
-    
-    doc.setFontSize(18);
-    doc.setTextColor('#A4464B'); // Burgundy Red
-    doc.text('IA', textStartX + 30, 20);
+  // AI FOR IA - single line with consistent size and color spacing measured
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor('#D4833C'); // Warm Orange
-    doc.text('UNITING', textStartX, 28);
-    
-    doc.setFontSize(10);
-    doc.setTextColor('#A4464B'); // Burgundy Red
-    doc.text('INDUSTRY-ACADEMIA', textStartX, 34);
-    
-    doc.setFontSize(9);
-    doc.setTextColor('#D4833C'); // Warm Orange
-    doc.text('THROUGH', textStartX, 40);
-    
-    doc.setFontSize(11);
+  const titleY = 14;
+  const gap = 2; // even gap between words in mm
+
+  // AI
+  doc.setTextColor('#2B5F6F'); // Deep Teal Blue
+  doc.text('AI', textStartX, titleY);
+  const aiWidth = doc.getTextWidth('AI');
+
+  // FOR
+  const forX = textStartX + aiWidth + gap;
+  doc.setTextColor('#D4833C'); // Warm Orange
+  doc.text('FOR', forX, titleY);
+  const forWidth = doc.getTextWidth('FOR');
+
+  // IA
+  const iaX = forX + forWidth + gap;
+  doc.setTextColor('#A4464B'); // Burgundy Red
+  doc.text('IA', iaX, titleY);
+
+  // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9); // slightly larger but same position
     doc.setTextColor('#2B5F6F'); // Deep Teal Blue
-    doc.setFont('helvetica', 'bold');
-    doc.text('ARTIFICIAL INTELLIGENCE', textStartX, 46);
+    doc.text('UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE', textStartX, 21);
 
     // Decorative line separator
     doc.setDrawColor('#D4833C');
-    doc.setLineWidth(0.5);
-    doc.line(15, 52, 95, 52);
+    doc.setLineWidth(0.4);
+    doc.line(12, 26, 85, 26);
 
     // Attendee Info Section
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor('#666666');
-    doc.text(`ID: ${attendee.id.substring(0, 12)}...`, 15, 58);
+    doc.text(`ID: ${attendee.id.substring(0, 12)}...`, 12, 31);
 
-    doc.setFontSize(16);
+  doc.setFontSize(13); // a little larger
     doc.setFont('helvetica', 'bold');
     doc.setTextColor('#2B5F6F'); // Deep Teal Blue
-    doc.text(attendee.name, 15, 66, { maxWidth: 80 });
+  doc.text(attendee.name, 12, 39, { maxWidth: 75 }); // a little lower
 
-    doc.setFontSize(10);
+  doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
     doc.setTextColor('#A4464B'); // Burgundy Red
-    doc.text(attendee.organization, 15, 72, { maxWidth: 80 });
+  doc.text(attendee.organization, 12, 46, { maxWidth: 75 }); // adjust to maintain spacing
 
     // QR Code Section (Right Side)
-    doc.addImage(qrCodeDataURL, 'PNG', 155, 15, 45, 45);
+    doc.addImage(qrCodeDataURL, 'PNG', 165, 8, 35, 35);
     
-    doc.setFontSize(7);
+    doc.setFontSize(6);
     doc.setTextColor('#666666');
     doc.setFont('helvetica', 'normal');
     const qrText = 'Scan for Check-in';
     const qrTextWidth = doc.getTextWidth(qrText);
-    doc.text(qrText, 177.5 - (qrTextWidth / 2), 65);
+    doc.text(qrText, 182.5 - (qrTextWidth / 2), 46);
 
     // Burgundy decorative corner
     doc.setFillColor('#A4464B');
-    doc.triangle(210, 0, 210, 8, 202, 0, 'F');
-    doc.triangle(0, 80, 8, 80, 0, 72, 'F');
+    doc.triangle(210, 0, 210, 6, 204, 0, 'F');
+    doc.triangle(0, 50, 6, 50, 0, 44, 'F');
 
     doc.save(`ticket-${attendee.name.replace(/\s+/g, '-')}.pdf`);
   };
@@ -545,10 +543,10 @@ export default function AttendeesPage() {
     }
 
     const ticketWidth = 190;
-    const ticketHeight = 70; // Reduced height for paper conservation
+    const ticketHeight = 27; // Smaller height to fit 10 tickets per page
     const pageMargin = 10;
     const pageHeight = doc.internal.pageSize.getHeight();
-    const ticketSpacing = 5;
+    const ticketSpacing = 2;
     let y = pageMargin;
     let isFirstTicket = true;
 
@@ -562,7 +560,7 @@ export default function AttendeesPage() {
       isFirstTicket = false;
 
       const qrCodeDataURL = await QRCode.toDataURL(attendee.id, {
-        width: 180,
+        width: 120,
         margin: 1,
         color: {
           dark: '#2B5F6F',
@@ -576,85 +574,73 @@ export default function AttendeesPage() {
 
       // Deep Teal Blue accent bar
       doc.setFillColor('#2B5F6F');
-      doc.rect(pageMargin, y, 7, ticketHeight, 'F');
+      doc.rect(pageMargin, y, 4, ticketHeight, 'F');
 
       // Warm Orange decorative line
       doc.setFillColor('#D4833C');
-      doc.rect(pageMargin + 7, y, 1.5, ticketHeight, 'F');
+      doc.rect(pageMargin + 4, y, 1, ticketHeight, 'F');
 
       // Logo (if loaded)
       if (logoDataURL) {
-        doc.addImage(logoDataURL, 'PNG', pageMargin + 12, y + 8, 20, 20);
+        doc.addImage(logoDataURL, 'PNG', pageMargin + 8, y + 2.5, 15, 15);
       }
 
       // Event Branding (shifted right if logo present)
-      const textStartX = logoDataURL ? pageMargin + 35 : pageMargin + 12;
+      const textStartX = logoDataURL ? pageMargin + 26 : pageMargin + 8;
       
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(16);
-      doc.setTextColor('#2B5F6F');
-      doc.text('AI', textStartX, y + 15);
-      
-      doc.setFontSize(12);
-      doc.setTextColor('#D4833C');
-      doc.text('FOR', textStartX + 13, y + 15);
-      
-      doc.setFontSize(16);
-      doc.setTextColor('#A4464B');
-      doc.text('IA', textStartX + 25, y + 15);
+  // AI FOR IA - single line; compute widths to keep even spacing
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
 
-      doc.setFont('helvetica', 'normal');
-      doc.setFontSize(8);
-      doc.setTextColor('#D4833C');
-      doc.text('UNITING', textStartX, y + 22);
-      
-      doc.setFontSize(9);
-      doc.setTextColor('#A4464B');
-      doc.text('INDUSTRY-ACADEMIA', textStartX, y + 27);
-      
-      doc.setFontSize(8);
-      doc.setTextColor('#D4833C');
-      doc.text('THROUGH', textStartX, y + 32);
-      
-      doc.setFontSize(10);
-      doc.setTextColor('#2B5F6F');
-      doc.setFont('helvetica', 'bold');
-      doc.text('ARTIFICIAL INTELLIGENCE', textStartX, y + 37);
+  const titleYSmall = y + 9;
+  const gapSmall = 1.8; // even gap between words
 
-      // Decorative line
-      doc.setDrawColor('#D4833C');
-      doc.setLineWidth(0.4);
-      doc.line(pageMargin + 12, y + 41, pageMargin + 85, y + 41);
+  // AI
+  doc.setTextColor('#2B5F6F');
+  doc.text('AI', textStartX, titleYSmall);
+  const aiWidthSmall = doc.getTextWidth('AI');
+
+  // FOR
+  const forXSmall = textStartX + aiWidthSmall + gapSmall;
+  doc.setTextColor('#D4833C');
+  doc.text('FOR', forXSmall, titleYSmall);
+  const forWidthSmall = doc.getTextWidth('FOR');
+
+  // IA
+  const iaXSmall = forXSmall + forWidthSmall + gapSmall;
+  doc.setTextColor('#A4464B');
+  doc.text('IA', iaXSmall, titleYSmall);
+
+  // UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE - single line, bold
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(7.2); // slightly larger but same baseline
+      doc.setTextColor('#2B5F6F');
+      doc.text('UNITING INDUSTRY-ACADEMIA THROUGH ARTIFICIAL INTELLIGENCE', textStartX, y + 14);
 
       // Attendee Info
-      doc.setFontSize(6);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor('#666666');
-      doc.text(`ID: ${attendee.id.substring(0, 12)}...`, pageMargin + 12, y + 46);
-
-      doc.setFontSize(14);
+  doc.setFontSize(9); // a little larger
       doc.setFont('helvetica', 'bold');
       doc.setTextColor('#2B5F6F');
-      doc.text(attendee.name, pageMargin + 12, y + 54, { maxWidth: 75 });
+  doc.text(attendee.name, pageMargin + 8, y + 21, { maxWidth: 115 }); // a little lower
 
-      doc.setFontSize(9);
+  doc.setFontSize(6);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor('#A4464B');
-      doc.text(attendee.organization, pageMargin + 12, y + 60, { maxWidth: 75 });
+  doc.text(attendee.organization, pageMargin + 8, y + 26, { maxWidth: 115 }); // maintain spacing
 
       // QR Code
-      doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 145, y + 12, 40, 40);
+      doc.addImage(qrCodeDataURL, 'PNG', pageMargin + 165, y + 4, 20, 20);
       
-      doc.setFontSize(6);
+      doc.setFontSize(5);
       doc.setTextColor('#666666');
-      const qrText = 'Scan for Check-in';
+      const qrText = 'Scan';
       const qrTextWidth = doc.getTextWidth(qrText);
-      doc.text(qrText, pageMargin + 165 - (qrTextWidth / 2), y + 56);
+      doc.text(qrText, pageMargin + 175 - (qrTextWidth / 2), y + 25);
 
       // Decorative corners
       doc.setFillColor('#A4464B');
-      doc.triangle(pageMargin + ticketWidth, y, pageMargin + ticketWidth, y + 6, pageMargin + ticketWidth - 6, y, 'F');
-      doc.triangle(pageMargin, y + ticketHeight, pageMargin + 6, y + ticketHeight, pageMargin, y + ticketHeight - 6, 'F');
+      doc.triangle(pageMargin + ticketWidth, y, pageMargin + ticketWidth, y + 4, pageMargin + ticketWidth - 4, y, 'F');
+      doc.triangle(pageMargin, y + ticketHeight, pageMargin + 4, y + ticketHeight, pageMargin, y + ticketHeight - 4, 'F');
 
       y += ticketHeight + ticketSpacing;
     }
@@ -666,7 +652,7 @@ export default function AttendeesPage() {
       description: `Exported ${filteredAttendees.length} ticket(s) successfully.`,
     });
   };
-
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">

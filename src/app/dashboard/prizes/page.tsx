@@ -93,6 +93,7 @@ export default function PrizesPage() {
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
+  const [restockAmount, setRestockAmount] = useState<number>(0);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState<PrizeFormData>({
@@ -300,9 +301,10 @@ export default function PrizesPage() {
     try {
       const prizeRef = doc(db, 'prizes', selectedPrize.id);
       
-      // Calculate remaining based on quantity change
-      const quantityDiff = formData.quantity - selectedPrize.quantity;
-      const newRemaining = Math.max(0, selectedPrize.remaining + quantityDiff);
+      // Calculate new totals based on restock amount (only increases stock)
+      const add = Math.max(0, Number.isFinite(restockAmount) ? restockAmount : 0);
+      const newQuantity = selectedPrize.quantity + add;
+      const newRemaining = Math.max(0, selectedPrize.remaining + add);
 
       // Upload new image if selected
       let imagePath = formData.image || selectedPrize.image || '';
@@ -317,7 +319,7 @@ export default function PrizesPage() {
         name: formData.name.trim(),
         description: formData.description.trim(),
         tier: formData.tier,
-        quantity: formData.quantity,
+        quantity: newQuantity,
         remaining: newRemaining,
         image: imagePath,
         updatedAt: Timestamp.now(),
@@ -330,6 +332,7 @@ export default function PrizesPage() {
 
       setIsEditDialogOpen(false);
       setSelectedPrize(null);
+      setRestockAmount(0);
       resetForm();
     } catch (error) {
       console.error('Error updating prize:', error);
@@ -380,6 +383,7 @@ export default function PrizesPage() {
     });
     setImagePreview(prize.image || '');
     setSelectedFile(null);
+    setRestockAmount(0);
     setIsEditDialogOpen(true);
   };
 
@@ -616,14 +620,14 @@ export default function PrizesPage() {
 
       {/* Edit Prize Dialog */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
+        <DialogContent className="sm:max-w-[500px] max-h-[90vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
             <DialogTitle>Edit Prize</DialogTitle>
             <DialogDescription>
-              Update the prize details. Note: Quantity can only be increased.
+              Update the prize details and restock availability.
             </DialogDescription>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
+          <div className="grid gap-4 py-4 overflow-y-auto flex-grow">
             <div className="grid gap-2">
               <Label htmlFor="edit-tier">Prize Tier *</Label>
               <Select
@@ -662,19 +666,37 @@ export default function PrizesPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="edit-quantity">Quantity *</Label>
+              <Label>Current Stock</Label>
+              <div className="grid grid-cols-3 gap-2 text-sm">
+                <div className="p-2 rounded-md bg-muted">
+                  <div className="text-muted-foreground">Total</div>
+                  <div className="font-medium">{selectedPrize?.quantity ?? 0}</div>
+                </div>
+                <div className="p-2 rounded-md bg-muted">
+                  <div className="text-muted-foreground">Remaining</div>
+                  <div className="font-medium">{selectedPrize?.remaining ?? 0}</div>
+                </div>
+                <div className="p-2 rounded-md bg-muted">
+                  <div className="text-muted-foreground">Claimed</div>
+                  <div className="font-medium">{(selectedPrize ? (selectedPrize.quantity - selectedPrize.remaining) : 0)}</div>
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="restock">Add Stock</Label>
               <Input
-                id="edit-quantity"
+                id="restock"
                 type="number"
-                min={selectedPrize?.quantity || 1}
-                value={formData.quantity}
-                onChange={(e) =>
-                  setFormData({ ...formData, quantity: parseInt(e.target.value) || 1 })
-                }
+                min={0}
+                value={restockAmount}
+                onChange={(e) => setRestockAmount(Math.max(0, parseInt(e.target.value) || 0))}
               />
               <p className="text-xs text-muted-foreground">
-                Current: {selectedPrize?.quantity} (can only increase)
+                Enter how many new units you want to add to this prize. This increases both Total and Remaining.
               </p>
+              <div className="text-xs text-muted-foreground">
+                After save: Total {selectedPrize ? selectedPrize.quantity + restockAmount : restockAmount} • Remaining {selectedPrize ? selectedPrize.remaining + restockAmount : restockAmount}
+              </div>
             </div>
             <div className="grid gap-2">
               <Label htmlFor="edit-image">Prize Image</Label>
@@ -702,7 +724,7 @@ export default function PrizesPage() {
               </p>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="flex-shrink-0">
             <Button
               variant="outline"
               onClick={() => {

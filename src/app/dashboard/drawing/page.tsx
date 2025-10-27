@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -104,18 +104,19 @@ export default function DrawingPage() {
       await Promise.race([
         (async () => {
           // 1. Fetch all prizes
-          const prizesQuery = query(collection(db, 'prizes'), orderBy('name'));
+          const database = db!; // Firestore available in client
+          const prizesQuery = query(collection(database, 'prizes'), orderBy('name'));
           const prizesSnapshot = await getDocs(prizesQuery);
           const prizesData = prizesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
           setAllPrizes(prizesData);
 
           // 2. Fetch all checked-in attendees
-          const attendeesQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
+          const attendeesQuery = query(collection(database, 'attendees'), where('checkedIn', '==', true));
           const attendeesSnapshot = await getDocs(attendeesQuery);
           const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
 
           // 3. Fetch all past winners to determine who is ineligible
-          const winnersQuery = query(collection(db, 'winners'));
+          const winnersQuery = query(collection(database, 'winners'));
           const winnersSnapshot = await getDocs(winnersQuery);
           const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
           
@@ -124,7 +125,7 @@ export default function DrawingPage() {
           setEligiblePool(eligibleAttendees);
           
           // 5. Fetch recent winners for display
-          const recentWinnersQuery = query(collection(db, 'winners'), orderBy('timestamp', 'desc'), limit(10));
+          const recentWinnersQuery = query(collection(database, 'winners'), orderBy('timestamp', 'desc'), limit(10));
           const recentWinnersSnapshot = await getDocs(recentWinnersQuery);
           const recentWinnersData = recentWinnersSnapshot.docs.map(doc => {
             const data = doc.data();
@@ -167,17 +168,28 @@ export default function DrawingPage() {
   };
 
   const startDrawing = () => {
-    if (!selectedPrize || eligiblePool.length === 0) return;
+    if (!selectedPrize || eligiblePool.length === 0 || (selectedPrize?.remaining ?? 0) <= 0) {
+      return;
+    }
     setDrawingState('drawing');
     setShowConfetti(false);
     setIsModalOpen(true);
     
-    // Shuffle animation logic
-    let tempShuffled = [...eligiblePool].sort(() => Math.random() - 0.5).slice(0, 20);
-    const finalWinner = eligiblePool[Math.floor(Math.random() * eligiblePool.length)];
-    tempShuffled.push(finalWinner);
-    setShuffledNames(tempShuffled.map(a => a.name));
+    // Build a longer, lively sequence of names that ends with the winner
+    // Ensure we always have enough entries to animate even with a tiny pool
+    const pool = eligiblePool.length > 0 ? eligiblePool : [];
+    const finalWinner = pool[Math.floor(Math.random() * pool.length)];
     setWinner(finalWinner);
+
+    const picks: string[] = [];
+    const targetLength = Math.max(40, Math.min(80, pool.length * 3));
+    for (let i = 0; i < targetLength - 1; i++) {
+      const p = pool[Math.floor(Math.random() * pool.length)];
+      picks.push(p.name);
+    }
+    // Guarantee the last item is the chosen winner
+    picks.push(finalWinner.name);
+    setShuffledNames(picks);
 
     setTimeout(() => {
       setDrawingState('revealed');
@@ -187,6 +199,10 @@ export default function DrawingPage() {
 
   const confirmWinner = async () => {
     if (!winner || !selectedPrize || isConfirming) return;
+    if ((selectedPrize?.remaining ?? 0) <= 0) {
+      toast({ title: 'Out of Stock', description: 'This prize has no remaining stock.', variant: 'destructive' });
+      return;
+    }
 
     setIsConfirming(true);
     
@@ -196,10 +212,11 @@ export default function DrawingPage() {
     }
     
     try {
-      const batch = writeBatch(db);
+      const database = db!; // Firestore is guaranteed in client env
+      const batch = writeBatch(database);
 
       // 1. Create a new winner document
-      const winnerRef = doc(collection(db, "winners"));
+      const winnerRef = doc(collection(database, "winners"));
       batch.set(winnerRef, {
         attendeeId: winner.id,
         attendeeName: winner.name,
@@ -211,7 +228,7 @@ export default function DrawingPage() {
       });
 
       // 2. Update the prize's remaining quantity
-      const prizeRef = doc(db, "prizes", selectedPrize.id);
+      const prizeRef = doc(database, "prizes", selectedPrize.id);
       batch.update(prizeRef, { remaining: selectedPrize.remaining - 1 });
       
       // Commit the batch (will be queued if offline)
@@ -222,13 +239,13 @@ export default function DrawingPage() {
       setAllPrizes(prevPrizes => 
         prevPrizes.map(p => 
           p.id === selectedPrize.id 
-            ? { ...p, remaining: p.remaining - 1 }
+            ? { ...p, remaining: Math.max(0, p.remaining - 1) }
             : p
         )
       );
       
       // Update the selected prize
-      setSelectedPrize(prev => prev ? { ...prev, remaining: prev.remaining - 1 } : null);
+      setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - 1) } : null);
       
       // Remove winner from eligible pool
       setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
@@ -264,12 +281,12 @@ export default function DrawingPage() {
         setAllPrizes(prevPrizes => 
           prevPrizes.map(p => 
             p.id === selectedPrize.id 
-              ? { ...p, remaining: p.remaining - 1 }
+              ? { ...p, remaining: Math.max(0, p.remaining - 1) }
               : p
           )
         );
         
-        setSelectedPrize(prev => prev ? { ...prev, remaining: prev.remaining - 1 } : null);
+        setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - 1) } : null);
         setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
         
         const newWinner: Winner = {
@@ -329,36 +346,77 @@ export default function DrawingPage() {
     }
   }
 
-  const NameCarousel = useCallback(() => {
-    // This component remains largely the same, no changes needed
-    const [currentIndex, setCurrentIndex] = useState(0);
-    useEffect(() => {
-        if (drawingState !== 'drawing') return;
-        const interval = setInterval(() => {
-            setCurrentIndex(prev => {
-                if (prev >= shuffledNames.length - 2) {
-                    clearInterval(interval);
-                    return shuffledNames.length -1;
-                }
-                return prev + 1;
-            });
-        }, 100);
-        return () => clearInterval(interval);
-    }, [drawingState, shuffledNames]);
+  // Improved, smoother name shuffle with easing and pixel-accurate movement
+  function NameCarousel() {
+    const containerRef = useRef<HTMLDivElement | null>(null);
+    const itemRef = useRef<HTMLDivElement | null>(null);
+    const [offsetPx, setOffsetPx] = useState(0);
 
-    const transformY = `translateY(-${currentIndex * 100}%)`;
+    // Measure a single item height to compute pixel offset precisely
+    const itemHeight = useMemo(() => {
+      return itemRef.current?.offsetHeight ?? 128; // fallback to 8rem
+    }, [itemRef.current?.offsetHeight]);
+
+    useEffect(() => {
+      if (drawingState !== 'drawing' || shuffledNames.length === 0) return;
+
+      let rafId = 0;
+      const totalSteps = Math.max(1, shuffledNames.length - 1);
+      const duration = 3200; // ms
+      const start = performance.now();
+
+      const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+
+      const tick = (now: number) => {
+        const t = Math.min((now - start) / duration, 1);
+        const eased = easeOutCubic(t);
+        const progress = eased * totalSteps;
+        setOffsetPx(progress * itemHeight);
+        if (t < 1) {
+          rafId = requestAnimationFrame(tick);
+        } else {
+          // Snap to the final item
+          setOffsetPx(totalSteps * itemHeight);
+        }
+      };
+
+      rafId = requestAnimationFrame(tick);
+      return () => cancelAnimationFrame(rafId);
+    }, [drawingState, shuffledNames, itemHeight]);
+
+    // Safety: duplicate a short list so animation doesn't look empty
+    const namesForDisplay = useMemo(() => {
+      if (shuffledNames.length >= 6) return shuffledNames;
+      const dup: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        dup.push(shuffledNames[i % Math.max(1, shuffledNames.length)] ?? '');
+      }
+      return dup;
+    }, [shuffledNames]);
+
     return (
-        <div className="h-32 overflow-hidden relative">
-            <div className="absolute top-0 left-0 right-0 h-10 bg-gradient-to-b from-background to-transparent z-10"/>
-            <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-background to-transparent z-10"/>
-            <div className="transition-transform duration-100 ease-linear" style={{ transform: transformY }}>
-                {shuffledNames.map((name, index) => (
-                    <div key={index} className="h-32 flex items-center justify-center text-5xl md:text-7xl font-bold">{name}</div>
-                ))}
+      <div ref={containerRef} className="h-40 md:h-48 overflow-hidden relative">
+        <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-background to-transparent z-10"/>
+        <div className="absolute bottom-0 left-0 right-0 h-12 bg-gradient-to-t from-background to-transparent z-10"/>
+        <div
+          className="will-change-transform"
+          style={{ transform: `translateY(-${offsetPx}px)` }}
+        >
+          {namesForDisplay.map((name, index) => (
+            <div
+              key={index}
+              ref={index === 0 ? itemRef : null}
+              className="h-40 md:h-48 flex items-center justify-center text-4xl md:text-6xl font-extrabold tracking-wide select-none"
+            >
+              <span className="text-primary-foreground drop-shadow-[0_2px_6px_rgba(0,0,0,0.35)]">
+                {name}
+              </span>
             </div>
+          ))}
         </div>
-    )
-  }, [shuffledNames, drawingState]);
+      </div>
+    );
+  }
 
 
   if (isLoading) {
@@ -431,9 +489,18 @@ export default function DrawingPage() {
                   <p className="text-muted-foreground mt-1">{eligiblePool.length} people are eligible to win.</p>
                 </div>
               </div>
-               <Button className="w-full mt-4" size="lg" onClick={startDrawing} disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0}>
-                {eligiblePool.length === 0 ? 'No Eligible Attendees' : 'Start Draw'}
-                </Button>
+               <Button
+                 className="w-full mt-4"
+                 size="lg"
+                 onClick={startDrawing}
+                 disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0 || (selectedPrize?.remaining ?? 0) <= 0}
+               >
+                 {eligiblePool.length === 0
+                   ? 'No Eligible Attendees'
+                   : (selectedPrize?.remaining ?? 0) <= 0
+                     ? 'Out of Stock'
+                     : 'Start Draw'}
+               </Button>
             </CardContent>
           </Card>
         )}

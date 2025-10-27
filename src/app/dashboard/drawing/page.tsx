@@ -51,6 +51,9 @@ export default function DrawingPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [winnersList, setWinnersList] = useState<Winner[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [showRedrawConfirm, setShowRedrawConfirm] = useState(false);
+  const [isConfirmed, setIsConfirmed] = useState(false);
 
   // Fetches all necessary data from Firestore on initial load
   const fetchData = useCallback(async () => {
@@ -125,8 +128,9 @@ export default function DrawingPage() {
   };
 
   const confirmWinner = async () => {
-    if (!winner || !selectedPrize) return;
+    if (!winner || !selectedPrize || isConfirming) return;
 
+    setIsConfirming(true);
     try {
       const batch = writeBatch(db);
 
@@ -151,26 +155,45 @@ export default function DrawingPage() {
       toast({ title: "Winner Confirmed!", description: `${winner.name} won the ${selectedPrize.name}.` });
 
       // 3. Update local state immediately for instant UI feedback
-      fetchData(); // Refetch data to ensure consistency
+      await fetchData(); // Refetch data to ensure consistency
+      
+      setIsConfirmed(true);
 
     } catch (error) {
       console.error("Error confirming winner:", error);
       toast({ title: "Error", description: "Could not save the winner. Please try again.", variant: "destructive" });
+      setIsConfirming(false);
     }
-    resetDraw();
   };
 
   const redraw = () => {
     if (!winner) return;
+    setShowRedrawConfirm(false);
     setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
     resetDraw(false); 
     startDrawing();
+  };
+
+  const handleRedrawClick = () => {
+    setShowRedrawConfirm(true);
+  };
+
+  const cancelRedraw = () => {
+    setShowRedrawConfirm(false);
+  };
+
+  const drawAgain = () => {
+    resetDraw();
+    setTimeout(() => startDrawing(), 100);
   };
   
   const resetDraw = (closeModal = true) => {
     setDrawingState('idle');
     setWinner(null);
     setShowConfetti(false);
+    setIsConfirming(false);
+    setIsConfirmed(false);
+    setShowRedrawConfirm(false);
     if (closeModal) {
       setIsModalOpen(false);
     }
@@ -323,10 +346,51 @@ export default function DrawingPage() {
                     )}
                 </div>
                 <div className="flex-shrink-0 p-4 bg-muted/50 border-t">
-                    {drawingState === 'revealed' && (
+                    {drawingState === 'revealed' && !isConfirmed && (
+                        <>
+                        {!showRedrawConfirm ? (
+                            <div className="grid grid-cols-2 gap-4">
+                                <Button size="lg" variant="outline" onClick={handleRedrawClick} disabled={isConfirming}>
+                                    <Redo className="mr-2 h-4 w-4" /> Redraw
+                                </Button>
+                                <Button size="lg" onClick={confirmWinner} disabled={isConfirming}>
+                                    {isConfirming ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Confirming...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Check className="mr-2 h-4 w-4" /> Confirm Winner
+                                        </>
+                                    )}
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                <p className="text-center text-sm text-muted-foreground">
+                                    Are you sure you want to redraw? This will exclude <span className="font-semibold">{winner?.name}</span> from the pool.
+                                </p>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Button size="lg" variant="outline" onClick={cancelRedraw}>
+                                        Cancel
+                                    </Button>
+                                    <Button size="lg" variant="destructive" onClick={redraw}>
+                                        Yes, Redraw
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                        </>
+                    )}
+                    {drawingState === 'revealed' && isConfirmed && (
                         <div className="grid grid-cols-2 gap-4">
-                        <Button size="lg" variant="outline" onClick={redraw}><Redo className="mr-2 h-4 w-4" /> Redraw</Button>
-                        <Button size="lg" onClick={confirmWinner}><Check className="mr-2 h-4 w-4" /> Confirm Winner</Button>
+                            <Button size="lg" variant="outline" onClick={() => resetDraw()}>
+                                Close
+                            </Button>
+                            <Button size="lg" onClick={drawAgain}>
+                                <Trophy className="mr-2 h-4 w-4" /> Draw Again
+                            </Button>
                         </div>
                     )}
                      {drawingState === 'drawing' && (

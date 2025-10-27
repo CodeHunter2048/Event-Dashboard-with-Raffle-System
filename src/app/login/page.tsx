@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { auth, db } from '@/lib/firebase';
+import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -25,14 +26,34 @@ export default function LoginForm() {
   const router = useRouter();
   const { toast } = useToast();
 
-  const handleLogin = async (e) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
+    if (!auth || !db) {
+      setError('Authentication service not initialized.');
+      return;
+    }
+
     try {
-      await signInWithEmailAndPassword(auth, email, password);
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
+      
+      // Log the login event
+      try {
+        await addDoc(collection(db, 'loginlogs'), {
+          userId: user.uid,
+          email: user.email || email,
+          displayName: user.displayName || email.split('@')[0],
+          action: 'login',
+          timestamp: serverTimestamp(),
+        });
+      } catch (logError) {
+        console.error('Error logging login event:', logError);
+      }
+      
       router.push('/dashboard');
-    } catch (error) {
+    } catch (error: any) {
       if (error.code === 'auth/invalid-credential') {
         setError('Invalid email or password.');
       } else {

@@ -37,6 +37,15 @@ export function SidebarNav() {
   const pathname = usePathname();
   const { isAdmin } = useAuth();
 
+  // Filter navigation items based on user role
+  const filteredNavItems = navItems.filter((item) => {
+    // Only show Analytics and Security to admin users
+    if (item.href === '/dashboard/analytics' || item.href === '/dashboard/security') {
+      return isAdmin;
+    }
+    return true;
+  });
+
   return (
     <SidebarContent>
       <div className="flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6">
@@ -47,7 +56,7 @@ export function SidebarNav() {
       </div>
       <nav className="grid items-start px-2 text-sm font-medium lg:px-4 pt-2">
         <SidebarMenu>
-          {navItems.map((item) => (
+          {filteredNavItems.map((item) => (
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild

@@ -1,46 +1,254 @@
 'use client';
+import { useState, useEffect } from 'react';
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
-import { winners, prizes, attendees } from '@/lib/data';
 import { Badge } from '@/components/ui/badge';
-import { Check, Clock } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, onSnapshot, query, orderBy } from 'firebase/firestore';
+import { Attendee, Prize, Winner } from '@/lib/data';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useToast } from '@/hooks/use-toast';
 
-const checkInData = [
-  { time: '9 AM', checkins: 45 },
-  { time: '10 AM', checkins: 78 },
-  { time: '11 AM', checkins: 120 },
-  { time: '12 PM', checkins: 65 },
-  { time: '1 PM', checkins: 34 },
-  { time: '2 PM', checkins: 12 },
-];
-
-const checkedInCount = attendees.filter(a => a.checkedIn).length;
-const totalPrizes = prizes.reduce((sum, p) => sum + p.quantity, 0);
-const claimedPrizes = winners.filter(w => w.claimed).length;
+interface CheckInDataPoint {
+  time: string;
+  checkins: number;
+}
 
 export default function AnalyticsPage() {
+  const { toast } = useToast();
+  const [attendees, setAttendees] = useState<Attendee[]>([]);
+  const [prizes, setPrizes] = useState<Prize[]>([]);
+  const [winners, setWinners] = useState<Winner[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [checkInData, setCheckInData] = useState<CheckInDataPoint[]>([]);
+
+  // Fetch real-time data from Firebase
+  useEffect(() => {
+    if (!db) {
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribes: (() => void)[] = [];
+
+    try {
+      // Listen to attendees collection - using simple query without orderBy to avoid index issues
+      const attendeesRef = collection(db, 'attendees');
+      const unsubAttendees = onSnapshot(
+        attendeesRef,
+        (snapshot) => {
+          const attendeesData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Safely handle checkInTime conversion
+            let checkInTimeISO = null;
+            try {
+              if (data.checkInTime && typeof data.checkInTime.toDate === 'function') {
+                checkInTimeISO = data.checkInTime.toDate().toISOString();
+              } else if (data.checkInTime && typeof data.checkInTime === 'string') {
+                checkInTimeISO = data.checkInTime;
+              }
+            } catch (e) {
+              console.warn('Error converting checkInTime for attendee:', doc.id, e);
+            }
+            
+            return {
+              id: doc.id,
+              name: data.name || '',
+              email: data.email || '',
+              organization: data.organization || '',
+              role: data.role || '',
+              avatar: data.avatar || '1',
+              checkedIn: data.checkedIn || false,
+              checkInTime: checkInTimeISO,
+              createdAt: data.createdAt,
+            } as Attendee;
+          });
+          setAttendees(attendeesData);
+          
+          // Calculate check-in data by hour
+          calculateCheckInTrend(attendeesData);
+        },
+        (error) => {
+          console.error('Error fetching attendees:', error);
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description: 'Failed to fetch attendees data.',
+          });
+        }
+      );
+      unsubscribes.push(unsubAttendees);
+
+      // Listen to prizes collection
+      const prizesQuery = collection(db, 'prizes');
+      const unsubPrizes = onSnapshot(
+        prizesQuery,
+        (snapshot) => {
+          const prizesData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+              id: doc.id,
+              name: data.name || '',
+              description: data.description || '',
+              quantity: data.quantity || 0,
+              remaining: data.remaining || 0,
+              tier: data.tier || 'Minor',
+              image: data.image || '',
+            } as Prize;
+          });
+          setPrizes(prizesData);
+        },
+        (error) => {
+          console.error('Error fetching prizes:', error);
+        }
+      );
+      unsubscribes.push(unsubPrizes);
+
+      // Listen to winners collection - using simple query without orderBy to avoid index issues
+      const winnersRef = collection(db, 'winners');
+      const unsubWinners = onSnapshot(
+        winnersRef,
+        (snapshot) => {
+          const winnersData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Safely handle timestamp conversion
+            let timestampISO = new Date().toISOString();
+            try {
+              if (data.timestamp && typeof data.timestamp.toDate === 'function') {
+                timestampISO = data.timestamp.toDate().toISOString();
+              } else if (data.timestamp && typeof data.timestamp === 'string') {
+                timestampISO = data.timestamp;
+              }
+            } catch (e) {
+              console.warn('Error converting timestamp for winner:', doc.id, e);
+            }
+            
+            return {
+              id: doc.id,
+              attendeeId: data.attendeeId,
+              prizeId: data.prizeId,
+              attendeeName: data.attendeeName,
+              attendeeOrganization: data.attendeeOrganization,
+              prizeName: data.prizeName,
+              timestamp: timestampISO,
+            };
+          });
+          // Sort by timestamp in JavaScript after fetching
+          winnersData.sort((a: any, b: any) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+          setWinners(winnersData as any);
+          setLoading(false);
+        },
+        (error) => {
+          console.error('Error fetching winners:', error);
+          setLoading(false);
+        }
+      );
+      unsubscribes.push(unsubWinners);
+
+    } catch (error) {
+      console.error('Error setting up listeners:', error);
+      setLoading(false);
+    }
+
+    return () => {
+      unsubscribes.forEach(unsub => unsub());
+    };
+  }, [toast]);
+
+  // Calculate check-in trend by hour
+  const calculateCheckInTrend = (attendeesData: Attendee[]) => {
+    const checkedInAttendees = attendeesData.filter(a => a.checkedIn && a.checkInTime);
+    
+    if (checkedInAttendees.length === 0) {
+      setCheckInData([]);
+      return;
+    }
+
+    // Group check-ins by hour
+    const hourlyData: { [key: string]: number } = {};
+    
+    checkedInAttendees.forEach(attendee => {
+      if (attendee.checkInTime) {
+        const date = new Date(attendee.checkInTime);
+        const hour = date.getHours();
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
+        const timeLabel = `${displayHour} ${period}`;
+        
+        hourlyData[timeLabel] = (hourlyData[timeLabel] || 0) + 1;
+      }
+    });
+
+    // Convert to array and sort by time
+    const sortedData = Object.entries(hourlyData)
+      .map(([time, checkins]) => ({ time, checkins }))
+      .sort((a, b) => {
+        // Simple sort for AM/PM times
+        const getHourValue = (timeStr: string) => {
+          const [hourStr, period] = timeStr.split(' ');
+          let hour = parseInt(hourStr);
+          if (period === 'PM' && hour !== 12) hour += 12;
+          if (period === 'AM' && hour === 12) hour = 0;
+          return hour;
+        };
+        return getHourValue(a.time) - getHourValue(b.time);
+      });
+
+    setCheckInData(sortedData);
+  };
+
+  // Calculate metrics
+  const checkedInCount = attendees.filter(a => a.checkedIn).length;
+  const attendanceRate = attendees.length > 0 ? ((checkedInCount / attendees.length) * 100).toFixed(1) : '0.0';
+  
+  // Find peak check-in time
+  const peakCheckIn = checkInData.length > 0
+    ? checkInData.reduce((max, curr) => curr.checkins > max.checkins ? curr : max, checkInData[0])
+    : null;
+
+  if (loading) {
+    return (
+      <div className="grid gap-6">
+        <div className="grid gap-6 md:grid-cols-2">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-60 mt-2" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-12 w-24" />
+              <Skeleton className="h-4 w-48 mt-2" />
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-60 mt-2" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-12 w-24" />
+              <Skeleton className="h-4 w-48 mt-2" />
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="grid gap-6">
-      <div className="grid gap-6 md:grid-cols-3">
+      <div className="grid gap-6 md:grid-cols-2">
          <Card>
             <CardHeader>
                 <CardTitle>Attendance Rate</CardTitle>
                 <CardDescription>Total registered vs. checked-in attendees.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="text-5xl font-bold">{((checkedInCount / attendees.length) * 100).toFixed(1)}%</div>
+                <div className="text-5xl font-bold">{attendanceRate}%</div>
                 <p className="text-xs text-muted-foreground">{checkedInCount} of {attendees.length} attendees checked in.</p>
-            </CardContent>
-         </Card>
-          <Card>
-            <CardHeader>
-                <CardTitle>Prize Claim Rate</CardTitle>
-                <CardDescription>Prizes awarded vs. prizes claimed by winners.</CardDescription>
-            </CardHeader>
-            <CardContent>
-                <div className="text-5xl font-bold">{((claimedPrizes / winners.length) * 100).toFixed(1)}%</div>
-                <p className="text-xs text-muted-foreground">{claimedPrizes} of {winners.length} prizes claimed.</p>
             </CardContent>
          </Card>
           <Card>
@@ -49,8 +257,17 @@ export default function AnalyticsPage() {
                 <CardDescription>The busiest hour for attendee arrivals.</CardDescription>
             </CardHeader>
             <CardContent>
-                <div className="text-5xl font-bold">11:00 AM</div>
-                <p className="text-xs text-muted-foreground">With {Math.max(...checkInData.map(d => d.checkins))} check-ins.</p>
+                {peakCheckIn ? (
+                  <>
+                    <div className="text-5xl font-bold">{peakCheckIn.time}</div>
+                    <p className="text-xs text-muted-foreground">With {peakCheckIn.checkins} check-ins.</p>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-5xl font-bold">--</div>
+                    <p className="text-xs text-muted-foreground">No check-ins yet.</p>
+                  </>
+                )}
             </CardContent>
          </Card>
       </div>
@@ -61,62 +278,67 @@ export default function AnalyticsPage() {
           <CardDescription>Number of attendee check-ins per hour.</CardDescription>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={350}>
-            <BarChart data={checkInData}>
-              <XAxis
-                dataKey="time"
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="hsl(var(--muted-foreground))"
-                fontSize={12}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(value) => `${value}`}
-              />
-              <Bar dataKey="checkins" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          {checkInData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={350}>
+              <BarChart data={checkInData}>
+                <XAxis
+                  dataKey="time"
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <YAxis
+                  stroke="hsl(var(--muted-foreground))"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${value}`}
+                />
+                <Bar dataKey="checkins" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-[350px] text-muted-foreground">
+              No check-in data available yet.
+            </div>
+          )}
         </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
           <CardTitle>Winners List</CardTitle>
-          <CardDescription>List of all prize winners and their claim status.</CardDescription>
+          <CardDescription>List of all prize winners.</CardDescription>
         </CardHeader>
         <CardContent>
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Winner</TableHead>
-                        <TableHead>Prize</TableHead>
-                        <TableHead>Drawn At</TableHead>
-                        <TableHead>Status</TableHead>
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {winners.map(winner => (
-                        <TableRow key={winner.attendee.id + winner.prize.id}>
-                            <TableCell>
-                                <div className="font-medium">{winner.attendee.name}</div>
-                                <div className="text-sm text-muted-foreground">{winner.attendee.organization}</div>
-                            </TableCell>
-                            <TableCell>{winner.prize.name}</TableCell>
-                            <TableCell>{new Date(winner.timestamp).toLocaleTimeString()}</TableCell>
-                            <TableCell>
-                                <Badge variant={winner.claimed ? 'default' : 'secondary'} className="gap-1">
-                                    {winner.claimed ? <Check className="h-3 w-3" /> : <Clock className="h-3 w-3"/>}
-                                    {winner.claimed ? 'Claimed' : 'Pending'}
-                                </Badge>
-                            </TableCell>
-                        </TableRow>
-                    ))}
-                </TableBody>
-            </Table>
+            {winners.length > 0 ? (
+              <Table>
+                  <TableHeader>
+                      <TableRow>
+                          <TableHead>Winner</TableHead>
+                          <TableHead>Prize</TableHead>
+                          <TableHead>Drawn At</TableHead>
+                      </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                      {winners.map((winner: any, index) => (
+                          <TableRow key={winner.id || index}>
+                              <TableCell>
+                                  <div className="font-medium">{winner.attendeeName}</div>
+                                  <div className="text-sm text-muted-foreground">{winner.attendeeOrganization}</div>
+                              </TableCell>
+                              <TableCell>{winner.prizeName}</TableCell>
+                              <TableCell>{new Date(winner.timestamp).toLocaleString()}</TableCell>
+                          </TableRow>
+                      ))}
+                  </TableBody>
+              </Table>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                No winners yet. Start drawing prizes!
+              </div>
+            )}
         </CardContent>
       </Card>
 

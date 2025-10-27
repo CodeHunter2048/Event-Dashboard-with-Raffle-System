@@ -1,8 +1,7 @@
 'use server';
 
 import { detectSuspiciousCheckins, DetectSuspiciousCheckinsOutput } from '@/ai/flows/detect-suspicious-checkins';
-import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
 
 interface CheckinData {
   attendeeId: string;
@@ -10,18 +9,22 @@ interface CheckinData {
   deviceId: string;
 }
 
-export async function analyzeCheckinData(): Promise<DetectSuspiciousCheckinsOutput> {
-  if (!db) {
-    return {
-      flags: [],
-      summary: 'Database not initialized. Please check Firebase configuration.'
-    };
-  }
+interface LoginData {
+  userId: string;
+  email: string;
+  displayName: string;
+  timestamp: string;
+  action: string;
+}
 
+export async function analyzeCheckinData(): Promise<DetectSuspiciousCheckinsOutput> {
   try {
-    // Fetch live scan logs from Firestore
-    const logsQuery = query(collection(db, 'scanlogs'), orderBy('timestamp', 'desc'));
-    const logsSnapshot = await getDocs(logsQuery);
+    // Fetch live scan logs from Firestore using Admin SDK
+    const logsSnapshot = await adminDb
+      .collection('scanlogs')
+      .orderBy('timestamp', 'desc')
+      .limit(500)
+      .get();
     
     const checkinData: CheckinData[] = logsSnapshot.docs.map(doc => {
       const data = doc.data();
@@ -34,15 +37,35 @@ export async function analyzeCheckinData(): Promise<DetectSuspiciousCheckinsOutp
       };
     });
 
-    if (checkinData.length === 0) {
+    // Fetch login logs from Firestore using Admin SDK
+    const loginLogsSnapshot = await adminDb
+      .collection('loginlogs')
+      .orderBy('timestamp', 'desc')
+      .limit(500)
+      .get();
+    
+    const loginData: LoginData[] = loginLogsSnapshot.docs.map(doc => {
+      const data = doc.data();
+      const timestamp = data.timestamp?.toDate ? data.timestamp.toDate().toISOString() : data.timestamp;
+      return {
+        userId: data.userId || '',
+        email: data.email || '',
+        displayName: data.displayName || '',
+        timestamp: timestamp || new Date().toISOString(),
+        action: data.action || '',
+      };
+    });
+
+    if (checkinData.length === 0 && loginData.length === 0) {
       return {
         flags: [],
-        summary: 'No check-in data available to analyze yet.'
+        summary: 'No check-in or login data available to analyze yet.'
       };
     }
 
     const input = {
       checkinData,
+      loginData,
       eventConfiguration: {
         eventId: 'AI-IA-2024',
         expectedAttendees: 300, // This could also be fetched dynamically
@@ -53,10 +76,10 @@ export async function analyzeCheckinData(): Promise<DetectSuspiciousCheckinsOutp
     return result;
   } catch (error) {
     console.error('Error analyzing check-in data:', error);
-    // Return a structured error response
+    // Return a structured error response with actual error details
     return {
       flags: [],
-      summary: 'An error occurred while analyzing the data. Please check the server logs.'
+      summary: `Error analyzing data: ${error instanceof Error ? error.message : 'Unknown error occurred'}. Please check the server logs for details.`
     };
   }
 }

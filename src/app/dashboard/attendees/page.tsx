@@ -111,6 +111,21 @@ export default function AttendeesPage() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const attendeesData = snapshot.docs.map(doc => {
         const data = doc.data();
+        
+        // Safely handle checkInTime conversion
+        let checkInTimeISO = null;
+        try {
+          if (data.checkInTime) {
+            if (typeof data.checkInTime.toDate === 'function') {
+              checkInTimeISO = data.checkInTime.toDate().toISOString();
+            } else if (typeof data.checkInTime === 'string') {
+              checkInTimeISO = data.checkInTime;
+            }
+          }
+        } catch (e) {
+          console.warn('Error converting checkInTime for attendee:', doc.id, e);
+        }
+        
         return {
           id: doc.id,
           name: data.name || '',
@@ -119,7 +134,7 @@ export default function AttendeesPage() {
           role: data.role || '',
           avatar: data.avatar || 1,
           checkedIn: data.checkedIn || false,
-          checkInTime: data.checkInTime || null,
+          checkInTime: checkInTimeISO,
           createdAt: data.createdAt,
         } as Attendee;
       });
@@ -714,7 +729,7 @@ export default function AttendeesPage() {
                 <div className="grid gap-2">
                   <Label>File Format</Label>
                   <p className="text-sm text-muted-foreground">
-                    Required columns: <strong>name</strong>, <strong>organization</strong>, <strong>role</strong>
+                    Required columns: <strong>name</strong>, <strong>organization/section</strong>, <strong>role</strong>
                     <br />
                     Optional: email
                   </p>
@@ -785,7 +800,7 @@ export default function AttendeesPage() {
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor="organization">Organization</Label>
+                    <Label htmlFor="organization">Organization/Section</Label>
                     <Input
                       id="organization"
                       value={formData.organization}
@@ -936,7 +951,7 @@ export default function AttendeesPage() {
                     <span className="sr-only">Avatar</span>
                   </TableHead>
                   <TableHead>Name</TableHead>
-                  <TableHead>Organization</TableHead>
+                  <TableHead>Organization/Section</TableHead>
                   <TableHead className="hidden md:table-cell">
                     Role
                   </TableHead>
@@ -971,9 +986,19 @@ export default function AttendeesPage() {
                         {attendee.role}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {attendee.checkedIn ? (
+                        {attendee.checkedIn && attendee.checkInTime ? (
                           <Badge>
-                            {new Date(attendee.checkInTime!).toLocaleTimeString()}
+                            {(() => {
+                              try {
+                                const date = new Date(attendee.checkInTime);
+                                if (isNaN(date.getTime())) {
+                                  return 'Invalid Date';
+                                }
+                                return date.toLocaleTimeString();
+                              } catch (e) {
+                                return 'Invalid Date';
+                              }
+                            })()}
                           </Badge>
                         ) : (
                           <Badge variant="secondary">Not Yet</Badge>
@@ -1144,11 +1169,21 @@ export default function AttendeesPage() {
                         {attendee.role}
                       </TableCell>
                       <TableCell className="hidden md:table-cell">
-                        {attendee.checkedIn && attendee.checkInTime && (
+                        {attendee.checkedIn && attendee.checkInTime ? (
                           <Badge>
-                            {new Date(attendee.checkInTime).toLocaleTimeString()}
+                            {(() => {
+                              try {
+                                const date = new Date(attendee.checkInTime);
+                                if (isNaN(date.getTime())) {
+                                  return 'Invalid Date';
+                                }
+                                return date.toLocaleTimeString();
+                              } catch (e) {
+                                return 'Invalid Date';
+                              }
+                            })()}
                           </Badge>
-                        )}
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <Tooltip>

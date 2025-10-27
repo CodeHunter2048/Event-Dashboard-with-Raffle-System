@@ -53,7 +53,7 @@ type ScanStatus = 'success' | 'error' | 'duplicate' | 'idle';
 
 export default function CheckInPage() {
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, userAccount } = useAuth();
   const [lastScan, setLastScan] = useState<{
     status: ScanStatus;
     attendee: Attendee | null;
@@ -68,7 +68,6 @@ export default function CheckInPage() {
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
   const isProcessingRef = useRef(false); // Flag to prevent multiple scans
-  const currentUser = 'Admin'; // In real app, get from auth context
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -273,7 +272,7 @@ export default function CheckInPage() {
       await addDoc(collection(db, 'scanlogs'), {
         attendeeId,
         attendeeName,
-        scannedBy: user?.displayName || 'Unknown Scanner',
+        scannedBy: userAccount?.displayName || user?.displayName || user?.email?.split('@')[0] || 'Unknown Scanner',
         timestamp: serverTimestamp(),
         action,
       });

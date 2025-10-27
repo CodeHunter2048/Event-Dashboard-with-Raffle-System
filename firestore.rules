@@ -30,8 +30,8 @@ service cloud.firestore {
     }
 
     match /attendees/{attendeeId} {
-      // Organizers and admins can read all attendees
-      allow read: if isAuthenticated();
+      // Allow public read access for display page, but write requires authentication
+      allow read: if true;
       // Organizers and admins can create, update attendees
       allow create: if isOrganizer();
       allow update: if isOrganizer();

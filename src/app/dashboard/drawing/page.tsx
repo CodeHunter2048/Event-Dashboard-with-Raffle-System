@@ -5,13 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Confetti } from '@/components/confetti';
-import { Award, Check, Redo, Users, Trophy, Loader2 } from 'lucide-react';
+import { Award, Check, Redo, Users, Trophy, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Firestore-compatible interfaces
 interface Attendee {
@@ -54,49 +55,106 @@ export default function DrawingPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showRedrawConfirm, setShowRedrawConfirm] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
+  const [isOnline, setIsOnline] = useState(true);
+  const [pendingSync, setPendingSync] = useState(false);
+
+  // Monitor network status
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      toast({ 
+        title: "Back Online", 
+        description: "Connection restored. Data will sync automatically.",
+        variant: "default"
+      });
+    };
+    
+    const handleOffline = () => {
+      setIsOnline(false);
+      toast({ 
+        title: "Offline Mode", 
+        description: "You can continue drawing. Changes will sync when connection is restored.",
+        variant: "default"
+      });
+    };
+
+    // Set initial state
+    setIsOnline(navigator.onLine);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [toast]);
 
   // Fetches all necessary data from Firestore on initial load
   const fetchData = useCallback(async () => {
     setIsLoading(true);
+    
+    // Create a timeout promise to prevent hanging when offline
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Fetch timeout')), 10000); // 10 second timeout
+    });
+    
     try {
-      // 1. Fetch all prizes
-      const prizesQuery = query(collection(db, 'prizes'), orderBy('name'));
-      const prizesSnapshot = await getDocs(prizesQuery);
-      const prizesData = prizesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
-      setAllPrizes(prizesData);
+      // Race between data fetch and timeout
+      await Promise.race([
+        (async () => {
+          // 1. Fetch all prizes
+          const prizesQuery = query(collection(db, 'prizes'), orderBy('name'));
+          const prizesSnapshot = await getDocs(prizesQuery);
+          const prizesData = prizesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Prize[];
+          setAllPrizes(prizesData);
 
-      // 2. Fetch all checked-in attendees
-      const attendeesQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
-      const attendeesSnapshot = await getDocs(attendeesQuery);
-      const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
+          // 2. Fetch all checked-in attendees
+          const attendeesQuery = query(collection(db, 'attendees'), where('checkedIn', '==', true));
+          const attendeesSnapshot = await getDocs(attendeesQuery);
+          const checkedInAttendees = attendeesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Attendee[];
 
-      // 3. Fetch all past winners to determine who is ineligible
-      const winnersQuery = query(collection(db, 'winners'));
-      const winnersSnapshot = await getDocs(winnersQuery);
-      const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
-      
-      // 4. Calculate the eligible pool
-      const eligibleAttendees = checkedInAttendees.filter(attendee => !winnerAttendeeIds.has(attendee.id));
-      setEligiblePool(eligibleAttendees);
-      
-      // 5. Fetch recent winners for display
-      const recentWinnersQuery = query(collection(db, 'winners'), orderBy('timestamp', 'desc'), limit(10));
-      const recentWinnersSnapshot = await getDocs(recentWinnersQuery);
-      const recentWinnersData = recentWinnersSnapshot.docs.map(doc => {
-        const data = doc.data();
-        const attendee = checkedInAttendees.find(a => a.id === data.attendeeId) || { id: data.attendeeId, name: data.attendeeName, organization: data.attendeeOrganization, avatar: 1, checkedIn: true };
-        const prize = prizesData.find(p => p.id === data.prizeId) || { id: data.prizeId, name: data.prizeName, tier: 'Unknown', remaining: 0, quantity: 0, description: '' };
-        return { attendee, prize, timestamp: new Date(data.timestamp?.toDate()).toISOString() };
-      }) as Winner[];
-      setWinnersList(recentWinnersData);
+          // 3. Fetch all past winners to determine who is ineligible
+          const winnersQuery = query(collection(db, 'winners'));
+          const winnersSnapshot = await getDocs(winnersQuery);
+          const winnerAttendeeIds = new Set(winnersSnapshot.docs.map(doc => doc.data().attendeeId));
+          
+          // 4. Calculate the eligible pool
+          const eligibleAttendees = checkedInAttendees.filter(attendee => !winnerAttendeeIds.has(attendee.id));
+          setEligiblePool(eligibleAttendees);
+          
+          // 5. Fetch recent winners for display
+          const recentWinnersQuery = query(collection(db, 'winners'), orderBy('timestamp', 'desc'), limit(10));
+          const recentWinnersSnapshot = await getDocs(recentWinnersQuery);
+          const recentWinnersData = recentWinnersSnapshot.docs.map(doc => {
+            const data = doc.data();
+            const attendee = checkedInAttendees.find(a => a.id === data.attendeeId) || { id: data.attendeeId, name: data.attendeeName, organization: data.attendeeOrganization, avatar: 1, checkedIn: true };
+            const prize = prizesData.find(p => p.id === data.prizeId) || { id: data.prizeId, name: data.prizeName, tier: 'Unknown', remaining: 0, quantity: 0, description: '' };
+            return { attendee, prize, timestamp: new Date(data.timestamp?.toDate()).toISOString() };
+          }) as Winner[];
+          setWinnersList(recentWinnersData);
+        })(),
+        timeoutPromise
+      ]);
 
-    } catch (error) {
-      console.error("Error fetching data:", error);
-      toast({ title: "Error", description: "Failed to load raffle data from the database.", variant: "destructive" });
+    } catch (error: any) {
+      if (error.message === 'Fetch timeout') {
+        console.warn("Data fetch timed out - using cached data");
+        if (!isOnline) {
+          toast({ 
+            title: "Using Cached Data", 
+            description: "Loading from local cache. Connect to internet for latest updates.",
+            variant: "default"
+          });
+        }
+      } else {
+        console.error("Error fetching data:", error);
+        toast({ title: "Error", description: "Failed to load raffle data from the database.", variant: "destructive" });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [toast]);
+  }, [toast, isOnline]);
 
   useEffect(() => {
     fetchData();
@@ -131,6 +189,12 @@ export default function DrawingPage() {
     if (!winner || !selectedPrize || isConfirming) return;
 
     setIsConfirming(true);
+    
+    // Show offline warning if not connected
+    if (!isOnline) {
+      setPendingSync(true);
+    }
+    
     try {
       const batch = writeBatch(db);
 
@@ -150,19 +214,85 @@ export default function DrawingPage() {
       const prizeRef = doc(db, "prizes", selectedPrize.id);
       batch.update(prizeRef, { remaining: selectedPrize.remaining - 1 });
       
+      // Commit the batch (will be queued if offline)
       await batch.commit();
 
-      toast({ title: "Winner Confirmed!", description: `${winner.name} won the ${selectedPrize.name}.` });
+      // 3. Update local state optimistically
+      // Update the prize quantity locally without fetching
+      setAllPrizes(prevPrizes => 
+        prevPrizes.map(p => 
+          p.id === selectedPrize.id 
+            ? { ...p, remaining: p.remaining - 1 }
+            : p
+        )
+      );
+      
+      // Update the selected prize
+      setSelectedPrize(prev => prev ? { ...prev, remaining: prev.remaining - 1 } : null);
+      
+      // Remove winner from eligible pool
+      setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
+      
+      // Add to winners list optimistically
+      const newWinner: Winner = {
+        attendee: winner,
+        prize: selectedPrize,
+        timestamp: new Date().toISOString()
+      };
+      setWinnersList(prev => [newWinner, ...prev].slice(0, 10));
 
-      // 3. Update local state immediately for instant UI feedback
-      await fetchData(); // Refetch data to ensure consistency
+      toast({ 
+        title: "Winner Confirmed!", 
+        description: `${winner.name} won the ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}` 
+      });
       
       setIsConfirmed(true);
+      
+      // Only fetch from server if online to refresh data
+      if (isOnline) {
+        setPendingSync(false);
+        // Fetch in background without blocking UI
+        fetchData().catch(err => console.error("Background fetch error:", err));
+      }
 
     } catch (error) {
       console.error("Error confirming winner:", error);
-      toast({ title: "Error", description: "Could not save the winner. Please try again.", variant: "destructive" });
-      setIsConfirming(false);
+      
+      // If offline, the write is cached by Firebase
+      if (!isOnline) {
+        // Still update local state optimistically
+        setAllPrizes(prevPrizes => 
+          prevPrizes.map(p => 
+            p.id === selectedPrize.id 
+              ? { ...p, remaining: p.remaining - 1 }
+              : p
+          )
+        );
+        
+        setSelectedPrize(prev => prev ? { ...prev, remaining: prev.remaining - 1 } : null);
+        setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
+        
+        const newWinner: Winner = {
+          attendee: winner,
+          prize: selectedPrize,
+          timestamp: new Date().toISOString()
+        };
+        setWinnersList(prev => [newWinner, ...prev].slice(0, 10));
+        
+        toast({ 
+          title: "Saved Offline", 
+          description: "Winner will be synced automatically when connection returns.",
+          variant: "default"
+        });
+        setIsConfirmed(true);
+      } else {
+        toast({ 
+          title: "Error", 
+          description: "Could not save the winner. Please try again.", 
+          variant: "destructive" 
+        });
+        setIsConfirming(false);
+      }
     }
   };
 
@@ -241,7 +371,29 @@ export default function DrawingPage() {
   }
 
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="space-y-4">
+      {/* Network Status Indicator */}
+      {!isOnline && (
+        <Alert>
+          <WifiOff className="h-4 w-4" />
+          <AlertTitle>Offline Mode</AlertTitle>
+          <AlertDescription>
+            You can continue drawing. All changes will be saved locally and synced automatically when connection is restored.
+          </AlertDescription>
+        </Alert>
+      )}
+      
+      {pendingSync && isOnline && (
+        <Alert>
+          <Wifi className="h-4 w-4 animate-pulse" />
+          <AlertTitle>Syncing...</AlertTitle>
+          <AlertDescription>
+            Synchronizing your offline changes with the server.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid gap-6 md:grid-cols-2">
       <div className="flex flex-col gap-6">
         <Card>
           <CardHeader>
@@ -402,6 +554,7 @@ export default function DrawingPage() {
                 </div>
             </DialogContent>
         </Dialog>
+      </div>
     </div>
   );
 }

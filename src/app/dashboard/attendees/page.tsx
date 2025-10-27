@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { File, PlusCircle, Upload, Ticket, Printer, Trash2 } from 'lucide-react';
+import { File, PlusCircle, Upload, Ticket, Printer, Trash2, Filter, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -93,6 +93,13 @@ export default function AttendeesPage() {
     organization: '',
     role: '',
   });
+  
+  // Filter states
+  const [nameFilter, setNameFilter] = useState('');
+  const [organizationFilter, setOrganizationFilter] = useState('');
+  const [roleFilter, setRoleFilter] = useState('');
+  const [checkedInFilter, setCheckedInFilter] = useState<'all' | 'checked' | 'not-checked'>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   // Real-time listener for attendees
   useEffect(() => {
@@ -130,6 +137,20 @@ export default function AttendeesPage() {
 
     return () => unsubscribe();
   }, [toast]);
+
+  // Filter attendees based on filter criteria
+  const getFilteredAttendees = (attendeesList: Attendee[]) => {
+    return attendeesList.filter(attendee => {
+      const matchesName = !nameFilter || attendee.name.toLowerCase().includes(nameFilter.toLowerCase());
+      const matchesOrg = !organizationFilter || attendee.organization.toLowerCase().includes(organizationFilter.toLowerCase());
+      const matchesRole = !roleFilter || attendee.role.toLowerCase().includes(roleFilter.toLowerCase());
+      const matchesCheckedIn = checkedInFilter === 'all' || 
+        (checkedInFilter === 'checked' && attendee.checkedIn) ||
+        (checkedInFilter === 'not-checked' && !attendee.checkedIn);
+      
+      return matchesName && matchesOrg && matchesRole && matchesCheckedIn;
+    });
+  };
 
   // Check if attendee name already exists (case-insensitive)
   const isDuplicateName = (name: string): boolean => {
@@ -491,6 +512,17 @@ export default function AttendeesPage() {
   };
 
   const generateAllTickets = async () => {
+    const filteredAttendees = getFilteredAttendees(attendees);
+    
+    if (filteredAttendees.length === 0) {
+      toast({
+        variant: 'destructive',
+        title: 'No Attendees',
+        description: 'No attendees match the current filters.',
+      });
+      return;
+    }
+
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -520,8 +552,8 @@ export default function AttendeesPage() {
     let y = pageMargin;
     let isFirstTicket = true;
 
-    for (let i = 0; i < attendees.length; i++) {
-      const attendee = attendees[i];
+    for (let i = 0; i < filteredAttendees.length; i++) {
+      const attendee = filteredAttendees[i];
       
       if (!isFirstTicket && y + ticketHeight > pageHeight - pageMargin) {
         doc.addPage();
@@ -628,6 +660,11 @@ export default function AttendeesPage() {
     }
 
     doc.save('all-attendee-tickets.pdf');
+    
+    toast({
+      title: 'Success',
+      description: `Exported ${filteredAttendees.length} ticket(s) successfully.`,
+    });
   };
 
   if (loading) {
@@ -643,12 +680,12 @@ export default function AttendeesPage() {
     <Tabs defaultValue="all">
       <div className="flex items-center">
         <TabsList>
-          <TabsTrigger value="all">All ({attendees.length})</TabsTrigger>
+          <TabsTrigger value="all">All ({getFilteredAttendees(attendees).length})</TabsTrigger>
           <TabsTrigger value="checked-in">
-            Checked-in ({attendees.filter(a => a.checkedIn).length})
+            Checked-in ({getFilteredAttendees(attendees.filter(a => a.checkedIn)).length})
           </TabsTrigger>
           <TabsTrigger value="not-checked-in">
-            Not Checked-in ({attendees.filter(a => !a.checkedIn).length})
+            Not Checked-in ({getFilteredAttendees(attendees.filter(a => !a.checkedIn)).length})
           </TabsTrigger>
         </TabsList>
         <div className="ml-auto flex items-center gap-2">
@@ -668,7 +705,7 @@ export default function AttendeesPage() {
           <Button size="sm" variant="outline" className="h-8 gap-1" onClick={generateAllTickets}>
             <Printer className="h-3.5 w-3.5" />
             <span className="sr-only sm:not-sr-only sm:whitespace-nowrap">
-              Export All Tickets
+              Export Filtered Tickets ({getFilteredAttendees(attendees).length})
             </span>
           </Button>
           <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
@@ -799,13 +836,114 @@ export default function AttendeesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filter Section */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="h-8"
+                >
+                  <Filter className="h-3.5 w-3.5 mr-2" />
+                  Filters
+                  {showFilters ? <ChevronUp className="h-3.5 w-3.5 ml-2" /> : <ChevronDown className="h-3.5 w-3.5 ml-2" />}
+                </Button>
+                {(nameFilter || organizationFilter || roleFilter || checkedInFilter !== 'all') && (
+                  <>
+                    <Badge variant="secondary" className="text-xs">
+                      {[nameFilter, organizationFilter, roleFilter, checkedInFilter !== 'all' ? 'status' : ''].filter(Boolean).length} active
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setNameFilter('');
+                        setOrganizationFilter('');
+                        setRoleFilter('');
+                        setCheckedInFilter('all');
+                      }}
+                      className="h-7"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
+              
+              {showFilters && (
+                <div className="mt-3 p-3 border rounded-lg bg-muted/30">
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div>
+                      <Label htmlFor="name-filter" className="text-xs mb-1">Name</Label>
+                      <Input
+                        id="name-filter"
+                        placeholder="Filter by name..."
+                        value={nameFilter}
+                        onChange={(e) => setNameFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="org-filter" className="text-xs mb-1">Organization</Label>
+                      <Input
+                        id="org-filter"
+                        placeholder="Filter by organization..."
+                        value={organizationFilter}
+                        onChange={(e) => setOrganizationFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="role-filter" className="text-xs mb-1">Role</Label>
+                      <Input
+                        id="role-filter"
+                        placeholder="Filter by role..."
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="checkin-filter" className="text-xs mb-1">Check-in Status</Label>
+                      <select
+                        id="checkin-filter"
+                        value={checkedInFilter}
+                        onChange={(e) => setCheckedInFilter(e.target.value as 'all' | 'checked' | 'not-checked')}
+                        className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors"
+                      >
+                        <option value="all">All</option>
+                        <option value="checked">Checked-in</option>
+                        <option value="not-checked">Not Checked-in</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">
                     <Checkbox
-                      checked={selectedAttendees.size === attendees.length && attendees.length > 0}
-                      onCheckedChange={toggleSelectAll}
+                      checked={
+                        getFilteredAttendees(attendees).length > 0 &&
+                        getFilteredAttendees(attendees).every(a => selectedAttendees.has(a.id))
+                      }
+                      onCheckedChange={() => {
+                        const filtered = getFilteredAttendees(attendees);
+                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
+                        const newSelected = new Set(selectedAttendees);
+                        
+                        if (allSelected) {
+                          filtered.forEach(a => newSelected.delete(a.id));
+                        } else {
+                          filtered.forEach(a => newSelected.add(a.id));
+                        }
+                        setSelectedAttendees(newSelected);
+                      }}
                     />
                   </TableHead>
                   <TableHead className="hidden w-[100px] sm:table-cell">
@@ -825,7 +963,7 @@ export default function AttendeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {attendees.map((attendee) => {
+                {getFilteredAttendees(attendees).map((attendee) => {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
@@ -885,24 +1023,97 @@ export default function AttendeesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filter Section */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="h-8"
+                >
+                  <Filter className="h-3.5 w-3.5 mr-2" />
+                  Filters
+                  {showFilters ? <ChevronUp className="h-3.5 w-3.5 ml-2" /> : <ChevronDown className="h-3.5 w-3.5 ml-2" />}
+                </Button>
+                {(nameFilter || organizationFilter || roleFilter) && (
+                  <>
+                    <Badge variant="secondary" className="text-xs">
+                      {[nameFilter, organizationFilter, roleFilter].filter(Boolean).length} active
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setNameFilter('');
+                        setOrganizationFilter('');
+                        setRoleFilter('');
+                      }}
+                      className="h-7"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
+              
+              {showFilters && (
+                <div className="mt-3 p-3 border rounded-lg bg-muted/30">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="name-filter-checked" className="text-xs mb-1">Name</Label>
+                      <Input
+                        id="name-filter-checked"
+                        placeholder="Filter by name..."
+                        value={nameFilter}
+                        onChange={(e) => setNameFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="org-filter-checked" className="text-xs mb-1">Organization</Label>
+                      <Input
+                        id="org-filter-checked"
+                        placeholder="Filter by organization..."
+                        value={organizationFilter}
+                        onChange={(e) => setOrganizationFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="role-filter-checked" className="text-xs mb-1">Role</Label>
+                      <Input
+                        id="role-filter-checked"
+                        placeholder="Filter by role..."
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">
                     <Checkbox
                       checked={
-                        attendees.filter(a => a.checkedIn).length > 0 &&
-                        attendees.filter(a => a.checkedIn).every(a => selectedAttendees.has(a.id))
+                        getFilteredAttendees(attendees.filter(a => a.checkedIn)).length > 0 &&
+                        getFilteredAttendees(attendees.filter(a => a.checkedIn)).every(a => selectedAttendees.has(a.id))
                       }
                       onCheckedChange={() => {
-                        const checkedInIds = attendees.filter(a => a.checkedIn).map(a => a.id);
-                        const allSelected = checkedInIds.every(id => selectedAttendees.has(id));
+                        const filtered = getFilteredAttendees(attendees.filter(a => a.checkedIn));
+                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
                         const newSelected = new Set(selectedAttendees);
                         
                         if (allSelected) {
-                          checkedInIds.forEach(id => newSelected.delete(id));
+                          filtered.forEach(a => newSelected.delete(a.id));
                         } else {
-                          checkedInIds.forEach(id => newSelected.add(id));
+                          filtered.forEach(a => newSelected.add(a.id));
                         }
                         setSelectedAttendees(newSelected);
                       }}
@@ -925,7 +1136,7 @@ export default function AttendeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {attendees.filter(a => a.checkedIn).map((attendee) => {
+                {getFilteredAttendees(attendees.filter(a => a.checkedIn)).map((attendee) => {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
@@ -983,24 +1194,97 @@ export default function AttendeesPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Filter Section */}
+            <div className="mb-4">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowFilters(!showFilters)}
+                  className="h-8"
+                >
+                  <Filter className="h-3.5 w-3.5 mr-2" />
+                  Filters
+                  {showFilters ? <ChevronUp className="h-3.5 w-3.5 ml-2" /> : <ChevronDown className="h-3.5 w-3.5 ml-2" />}
+                </Button>
+                {(nameFilter || organizationFilter || roleFilter) && (
+                  <>
+                    <Badge variant="secondary" className="text-xs">
+                      {[nameFilter, organizationFilter, roleFilter].filter(Boolean).length} active
+                    </Badge>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setNameFilter('');
+                        setOrganizationFilter('');
+                        setRoleFilter('');
+                      }}
+                      className="h-7"
+                    >
+                      <X className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  </>
+                )}
+              </div>
+              
+              {showFilters && (
+                <div className="mt-3 p-3 border rounded-lg bg-muted/30">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="name-filter-not-checked" className="text-xs mb-1">Name</Label>
+                      <Input
+                        id="name-filter-not-checked"
+                        placeholder="Filter by name..."
+                        value={nameFilter}
+                        onChange={(e) => setNameFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="org-filter-not-checked" className="text-xs mb-1">Organization</Label>
+                      <Input
+                        id="org-filter-not-checked"
+                        placeholder="Filter by organization..."
+                        value={organizationFilter}
+                        onChange={(e) => setOrganizationFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="role-filter-not-checked" className="text-xs mb-1">Role</Label>
+                      <Input
+                        id="role-filter-not-checked"
+                        placeholder="Filter by role..."
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-8"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[50px]">
                     <Checkbox
                       checked={
-                        attendees.filter(a => !a.checkedIn).length > 0 &&
-                        attendees.filter(a => !a.checkedIn).every(a => selectedAttendees.has(a.id))
+                        getFilteredAttendees(attendees.filter(a => !a.checkedIn)).length > 0 &&
+                        getFilteredAttendees(attendees.filter(a => !a.checkedIn)).every(a => selectedAttendees.has(a.id))
                       }
                       onCheckedChange={() => {
-                        const notCheckedInIds = attendees.filter(a => !a.checkedIn).map(a => a.id);
-                        const allSelected = notCheckedInIds.every(id => selectedAttendees.has(id));
+                        const filtered = getFilteredAttendees(attendees.filter(a => !a.checkedIn));
+                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
                         const newSelected = new Set(selectedAttendees);
                         
                         if (allSelected) {
-                          notCheckedInIds.forEach(id => newSelected.delete(id));
+                          filtered.forEach(a => newSelected.delete(a.id));
                         } else {
-                          notCheckedInIds.forEach(id => newSelected.add(id));
+                          filtered.forEach(a => newSelected.add(a.id));
                         }
                         setSelectedAttendees(newSelected);
                       }}
@@ -1023,7 +1307,7 @@ export default function AttendeesPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {attendees.filter(a => !a.checkedIn).map((attendee) => {
+                {getFilteredAttendees(attendees.filter(a => !a.checkedIn)).map((attendee) => {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>

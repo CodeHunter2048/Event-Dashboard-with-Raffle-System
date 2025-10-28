@@ -6,14 +6,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Confetti } from '@/components/confetti';
-import { Award, Check, Redo, Users, Trophy, Loader2, Wifi, WifiOff } from 'lucide-react';
+import { Award, Check, Redo, Users, Trophy, Loader2 } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, writeBatch, serverTimestamp, orderBy, limit, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, getDocs, getDoc, doc, writeBatch, serverTimestamp, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { useToast } from '@/hooks/use-toast';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 // Firestore-compatible interfaces
 interface Attendee {
@@ -22,6 +21,7 @@ interface Attendee {
   organization: string;
   avatar: number;
   checkedIn: boolean;
+  isEligible?: boolean; // Track if attendee is eligible for drawing
 }
 
 interface Prize {
@@ -56,44 +56,49 @@ export default function DrawingPage() {
   const [isConfirming, setIsConfirming] = useState(false);
   const [showRedrawConfirm, setShowRedrawConfirm] = useState(false);
   const [isConfirmed, setIsConfirmed] = useState(false);
-  const [isOnline, setIsOnline] = useState(true);
-  const [pendingSync, setPendingSync] = useState(false);
   const [drawQuantity, setDrawQuantity] = useState(1);
   const [batchWinners, setBatchWinners] = useState<Attendee[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
   const [confettiKey, setConfettiKey] = useState(0);
 
-  // Monitor network status
-  useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      toast({ 
-        title: "Back Online", 
-        description: "Connection restored. Data will sync automatically.",
-        variant: "default"
-      });
-    };
-    
-    const handleOffline = () => {
-      setIsOnline(false);
-      toast({ 
-        title: "Offline Mode", 
-        description: "You can continue drawing. Changes will sync when connection is restored.",
-        variant: "default"
-      });
-    };
+  // Fetch fresh selected prize and eligible attendees from Firestore
+  const syncWithDatabase = async (): Promise<{ eligible: Attendee[]; prize: Prize | null }> => {
+    if (!db) return { eligible: eligiblePool, prize: selectedPrize };
+    try {
+      const database = db;
 
-    // Set initial state
-    setIsOnline(navigator.onLine);
+      // Refresh selected prize if one is chosen
+      let freshPrize: Prize | null = selectedPrize;
+      if (selectedPrize) {
+        const prizeRef = doc(database, 'prizes', selectedPrize.id);
+        const prizeSnap = await getDoc(prizeRef);
+        if (prizeSnap.exists()) {
+          freshPrize = { id: prizeSnap.id, ...(prizeSnap.data() as Omit<Prize, 'id'>) } as Prize;
+          setSelectedPrize(freshPrize);
+        }
+      }
 
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
+      // Fresh eligible attendees (checked-in + eligible) minus anyone who already won
+      const attendeesSnap = await getDocs(
+        query(
+          collection(database, 'attendees'),
+          where('checkedIn', '==', true),
+          where('isEligible', '==', true)
+        )
+      );
+      const freshAttendees = attendeesSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) })) as Attendee[];
 
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [toast]);
+      const winnersSnap = await getDocs(collection(database, 'winners'));
+      const winnerIds = new Set(winnersSnap.docs.map(d => d.data().attendeeId));
+      const freshEligible = freshAttendees.filter(a => !winnerIds.has(a.id));
+      setEligiblePool(freshEligible);
+
+      return { eligible: freshEligible, prize: freshPrize ?? null };
+    } catch (e) {
+      console.error('Error syncing with database:', e);
+      return { eligible: eligiblePool, prize: selectedPrize };
+    }
+  };
 
   // Set up real-time listeners for all data
   useEffect(() => {
@@ -119,7 +124,11 @@ export default function DrawingPage() {
     );
 
     // Real-time listener for checked-in attendees and winners (to calculate eligible pool)
-    const attendeesQuery = query(collection(database, 'attendees'), where('checkedIn', '==', true));
+    const attendeesQuery = query(
+      collection(database, 'attendees'), 
+      where('checkedIn', '==', true),
+      where('isEligible', '==', true) // Only include eligible attendees
+    );
     const winnersQuery = query(collection(database, 'winners'));
 
     const unsubscribeAttendees = onSnapshot(
@@ -229,13 +238,24 @@ export default function DrawingPage() {
     }
   }, [maxDrawQuantity, drawQuantity]);
 
-  const startDrawing = () => {
+  const startDrawing = (overridePool?: Attendee[]) => {
     if (!selectedPrize || eligiblePool.length === 0 || (selectedPrize?.remaining ?? 0) <= 0) {
       return;
     }
 
-    // Select multiple winners for batch draw
-    const pool = [...eligiblePool];
+    // Use current eligiblePool state - create a fresh copy to avoid mutations
+    const currentPool = (overridePool ?? eligiblePool).filter(attendee => attendee.isEligible !== false);
+    
+    if (currentPool.length === 0) {
+      toast({
+        title: "No Eligible Attendees",
+        description: "There are no eligible attendees left in the pool.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+  const pool = [...currentPool];
     const selectedWinners: Attendee[] = [];
     const actualDrawCount = Math.min(drawQuantity, pool.length, selectedPrize.remaining);
 
@@ -258,8 +278,20 @@ export default function DrawingPage() {
   const animateWinner = (winnerToShow: Attendee) => {
     setWinner(winnerToShow);
     
-    // Build animation sequence
-    const pool = eligiblePool.length > 0 ? eligiblePool : [];
+    // Build animation sequence - ONLY use currently eligible attendees
+    const pool = eligiblePool.filter(a => a.isEligible !== false && a.id !== winnerToShow.id);
+    
+    if (pool.length === 0) {
+      // If no other eligible attendees, just show the winner
+      setShuffledNames([winnerToShow.name]);
+      setTimeout(() => {
+        setDrawingState('revealed');
+        setShowConfetti(true);
+        setConfettiKey(prev => prev + 1);
+      }, 1000);
+      return;
+    }
+    
     const picks: string[] = [];
     const targetLength = Math.max(40, Math.min(80, pool.length * 3));
     for (let i = 0; i < targetLength - 1; i++) {
@@ -295,11 +327,6 @@ export default function DrawingPage() {
 
     setIsConfirming(true);
     
-    // Show offline warning if not connected
-    if (!isOnline) {
-      setPendingSync(true);
-    }
-    
     try {
       const database = db!;
       const batch = writeBatch(database);
@@ -322,108 +349,105 @@ export default function DrawingPage() {
           timestamp: serverTimestamp(),
           claimed: false,
         });
+        
+        // 2. Set isEligible to false for winners so they can't win again
+        const attendeeRef = doc(database, "attendees", winnerAttendee.id);
+        batch.update(attendeeRef, { isEligible: false });
       });
 
-      // 2. Update the prize's remaining quantity
+      // 3. Update the prize's remaining quantity
       const prizeRef = doc(database, "prizes", selectedPrize.id);
       batch.update(prizeRef, { remaining: selectedPrize.remaining - winnersToConfirm.length });
       
-      // Commit the batch
-      await batch.commit();
+  // Commit the batch
+  await batch.commit();
 
-      // 3. Update local state optimistically
-      setAllPrizes(prevPrizes => 
-        prevPrizes.map(p => 
-          p.id === selectedPrize.id 
-            ? { ...p, remaining: Math.max(0, p.remaining - winnersToConfirm.length) }
-            : p
-        )
-      );
-      
-      setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - winnersToConfirm.length) } : null);
-      
-      // Remove all winners from eligible pool
-      const winnerIds = new Set(winnersToConfirm.map(w => w.id));
-      setEligiblePool(prevPool => prevPool.filter(a => !winnerIds.has(a.id)));
-      
-      // Add to winners list optimistically
-      const newWinners: Winner[] = winnersToConfirm.map(w => ({
-        attendee: w,
-        prize: selectedPrize,
-        timestamp: new Date().toISOString()
-      }));
-      setWinnersList(prev => [...newWinners, ...prev].slice(0, 10));
+  // Ensure UI reflects latest DB state (remaining + eligible pool)
+  await syncWithDatabase();
 
       const message = drawQuantity > 1 
-        ? `${winnersToConfirm.length} winners confirmed for ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}`
-        : `${winner.name} won the ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}`;
+        ? `${winnersToConfirm.length} winners confirmed for ${selectedPrize.name}.`
+        : `${winner.name} won the ${selectedPrize.name}.`;
 
       toast({ 
         title: "Winner(s) Confirmed!", 
         description: message
       });
       
-      setIsConfirmed(true);
-      
-      if (isOnline) {
-        setPendingSync(false);
-      }
+  setIsConfirmed(true);
 
     } catch (error) {
       console.error("Error confirming winner:", error);
-      
-      if (!isOnline) {
-        // Still update local state optimistically
-        const winnersToConfirm = drawQuantity > 1 ? batchWinners : [winner];
-        
-        setAllPrizes(prevPrizes => 
-          prevPrizes.map(p => 
-            p.id === selectedPrize.id 
-              ? { ...p, remaining: Math.max(0, p.remaining - winnersToConfirm.length) }
-              : p
-          )
-        );
-        
-        setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - winnersToConfirm.length) } : null);
-        
-        const winnerIds = new Set(winnersToConfirm.map(w => w.id));
-        setEligiblePool(prevPool => prevPool.filter(a => !winnerIds.has(a.id)));
-        
-        const newWinners: Winner[] = winnersToConfirm.map(w => ({
-          attendee: w,
-          prize: selectedPrize,
-          timestamp: new Date().toISOString()
-        }));
-        setWinnersList(prev => [...newWinners, ...prev].slice(0, 10));
-        
-        toast({ 
-          title: "Saved Offline", 
-          description: "Winner(s) will be synced automatically when connection returns.",
-          variant: "default"
-        });
-        setIsConfirmed(true);
-      } else {
-        toast({ 
-          title: "Error", 
-          description: "Could not save the winner(s). Please try again.", 
-          variant: "destructive" 
-        });
-        setIsConfirming(false);
-      }
+      toast({ 
+        title: "Error", 
+        description: "Could not save the winner(s). Please try again.", 
+        variant: "destructive" 
+      });
+      setIsConfirming(false);
     }
   };
 
-  const redraw = () => {
-    if (!winner) return;
+  const redraw = async () => {
+    if (!winner || !db) return;
     setShowRedrawConfirm(false);
     
-    // For batch draws, exclude all current batch winners
-    const winnersToExclude = drawQuantity > 1 ? batchWinners : [winner];
-    const excludeIds = new Set(winnersToExclude.map(w => w.id));
-    setEligiblePool(pool => pool.filter(p => !excludeIds.has(p.id)));
-    
-    resetDraw(false); 
-    startDrawing();
+    try {
+      const database = db;
+      
+      // For batch draws, exclude all current batch winners
+      const winnersToExclude = drawQuantity > 1 ? batchWinners : [winner];
+      
+  // FIRST: Remove from local pool IMMEDIATELY before any async operations
+  const excludeIds = new Set(winnersToExclude.map(w => w.id));
+  const updatedPool = eligiblePool.filter(p => !excludeIds.has(p.id));
+  setEligiblePool(updatedPool);
+      
+      const batch = writeBatch(database);
+      
+      // Delete the winner record(s) BUT keep isEligible as false
+      const winnersQuery = query(collection(database, 'winners'));
+      const winnersSnapshot = await getDocs(winnersQuery);
+      
+      winnersToExclude.forEach((winnerAttendee) => {
+        // Find and delete the winner document
+        winnersSnapshot.docs.forEach(winnerDoc => {
+          if (winnerDoc.data().attendeeId === winnerAttendee.id) {
+            batch.delete(doc(database, 'winners', winnerDoc.id));
+          }
+        });
+        
+        // Keep isEligible as FALSE - they had their chance, even if absent
+        const attendeeRef = doc(database, "attendees", winnerAttendee.id);
+        batch.update(attendeeRef, { isEligible: false });
+      });
+      
+      // DON'T update prize quantity - it will be updated only when winner is confirmed
+      // The prize quantity should stay the same since we're just excluding this attendee
+      
+      await batch.commit();
+
+      // Sync from DB to ensure absent attendee is removed and counts reflect server
+      const { eligible } = await syncWithDatabase();
+
+      toast({
+        title: "Redrawing",
+        description: `${winnersToExclude.length > 1 ? 'Winners were' : 'Winner was'} absent and disqualified.`,
+      });
+      
+      resetDraw(false);
+      
+      // Start next draw using the freshly synced eligible pool
+      setTimeout(() => {
+        startDrawing(eligible);
+      }, 150);
+    } catch (error) {
+      console.error("Error during redraw:", error);
+      toast({
+        title: "Error",
+        description: "Failed to process redraw. Please try again.",
+        variant: "destructive"
+      });
+    }
   };
 
   const handleRedrawClick = () => {
@@ -432,6 +456,8 @@ export default function DrawingPage() {
 
   const cancelRedraw = () => {
     setShowRedrawConfirm(false);
+    // Optional: ensure pool/prize stats reflect DB when cancelling
+    void syncWithDatabase();
   };
 
   const drawAgain = () => {
@@ -442,6 +468,7 @@ export default function DrawingPage() {
   const resetDraw = (closeModal = true) => {
     setDrawingState('idle');
     setWinner(null);
+    setShuffledNames([]);
     setShowConfetti(false);
     setIsConfirming(false);
     setIsConfirmed(false);
@@ -537,27 +564,6 @@ export default function DrawingPage() {
 
   return (
     <div className="space-y-4">
-      {/* Network Status Indicator */}
-      {!isOnline && (
-        <Alert>
-          <WifiOff className="h-4 w-4" />
-          <AlertTitle>Offline Mode</AlertTitle>
-          <AlertDescription>
-            You can continue drawing. All changes will be saved locally and synced automatically when connection is restored.
-          </AlertDescription>
-        </Alert>
-      )}
-      
-      {pendingSync && isOnline && (
-        <Alert>
-          <Wifi className="h-4 w-4 animate-pulse" />
-          <AlertTitle>Syncing...</AlertTitle>
-          <AlertDescription>
-            Synchronizing your offline changes with the server.
-          </AlertDescription>
-        </Alert>
-      )}
-
       <div className="grid gap-6 md:grid-cols-2">
       <div className="flex flex-col gap-6">
         <Card>
@@ -590,10 +596,13 @@ export default function DrawingPage() {
               <h3 className="text-xl font-bold">{selectedPrize.name}</h3>
               <p className="text-muted-foreground">{selectedPrize.description}</p>
               <div className='grid grid-cols-2 gap-4'>
-                <p><span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining</p>
                 <div>
-                  <div className="flex items-center gap-2"><Users />Eligible Pool</div>
-                  <p className="text-muted-foreground mt-1">{eligiblePool.length} people are eligible to win.</p>
+                  <div className="flex items-center gap-2"><Award className="h-4 w-4" />Stock</div>
+                  <p className="text-muted-foreground mt-1"><span className="font-bold">{selectedPrize.remaining}</span> of {selectedPrize.quantity} remaining</p>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2"><Users className="h-4 w-4" />Eligible Pool</div>
+                  <p className="text-muted-foreground mt-1">{eligiblePool.length} people eligible</p>
                 </div>
               </div>
 
@@ -623,7 +632,7 @@ export default function DrawingPage() {
                <Button
                  className="w-full mt-4"
                  size="lg"
-                 onClick={startDrawing}
+                 onClick={() => startDrawing()}
                  disabled={!selectedPrize || drawingState !== 'idle' || eligiblePool.length === 0 || (selectedPrize?.remaining ?? 0) <= 0}
                >
                  {eligiblePool.length === 0

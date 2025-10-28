@@ -238,6 +238,7 @@ export default function CheckInPage() {
       await updateDoc(attendeeRef, {
         checkedIn: true,
         checkInTime: checkInTimestamp,
+        isEligible: true, // Make eligible for raffle upon check-in
       });
 
       await logScan(pendingAttendee.id, pendingAttendee.name, 'checked-in');
@@ -302,6 +303,7 @@ export default function CheckInPage() {
       await updateDoc(attendeeRef, {
         checkedIn: true,
         checkInTime: serverTimestamp(),
+        isEligible: true, // Make eligible for raffle upon check-in
       });
       await logScan(attendee.id, attendee.name, 'checked-in');
       setLastScan({ status: 'success', attendee: { ...attendee, checkedIn: true, checkInTime: new Date().toISOString() }, message: 'Check-in successful!' });

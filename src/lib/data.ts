@@ -7,6 +7,7 @@ export type Attendee = {
   checkedIn: boolean;
   checkInTime: string | null;
   avatar: string;
+  isEligible?: boolean; // Track if attendee is eligible for raffle drawing
 };
 
 export type Prize = {

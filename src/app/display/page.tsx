@@ -121,7 +121,7 @@ export default function DisplayPage() {
             </h2>
             <div className="flex items-center justify-center gap-2 text-xl md:text-2xl text-slate-300">
               <Users className="h-6 w-6 text-cyan-400" />
-              <p>Welcome delegates!</p>
+              <p>Welcome attendees!</p>
             </div>
           </header>
 

@@ -273,28 +273,45 @@ Access the Genkit Developer UI at `http://localhost:4000`
 
 ## 🌐 Deployment
 
-### Firebase Hosting (Recommended)
+### Vercel (Current Hosting)
 
-1. **Install Firebase CLI**
-   ```bash
-   npm install -g firebase-tools
-   ```
+This project is deployed on **Vercel**, the recommended platform for Next.js applications.
 
-2. **Login to Firebase**
-   ```bash
-   firebase login
+1. **Connect Repository**
+   - Go to [Vercel Dashboard](https://vercel.com/dashboard)
+   - Import your GitHub repository
+   - Select the `Event-Dashboard-with-Raffle-System` repository
+
+2. **Configure Environment Variables**
+   Add the following environment variables in Vercel project settings:
+   ```env
+   NEXT_PUBLIC_FIREBASE_API_KEY
+   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+   NEXT_PUBLIC_FIREBASE_PROJECT_ID
+   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+   NEXT_PUBLIC_FIREBASE_APP_ID
+   FIREBASE_SERVICE_ACCOUNT
+   GOOGLE_GENAI_API_KEY
    ```
 
 3. **Deploy**
-   ```bash
-   npm run build
-   firebase deploy
-   ```
+   - Vercel automatically deploys on every push to `main` branch
+   - Preview deployments are created for pull requests
+   - Manual deployment: Click "Deploy" in Vercel dashboard
 
-See `COMING_SOON_DEPLOY.md` for deployment considerations.
+**Benefits of Vercel:**
+- ✅ Automatic CI/CD from GitHub
+- ✅ Edge network for fast global delivery
+- ✅ Serverless functions for API routes
+- ✅ Zero-config Next.js optimization
+- ✅ Free SSL certificates
+- ✅ Preview deployments for testing
+
+See `COMING_SOON_DEPLOY.md` for additional deployment considerations.
 
 ### Alternative Platforms
-- Vercel (recommended for Next.js)
+- Firebase Hosting
 - Netlify
 - Google Cloud Run
 - Self-hosted with Node.js

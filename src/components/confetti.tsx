@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 
 interface ConfettiParticle {
@@ -31,49 +31,137 @@ const createParticle = (id: number): ConfettiParticle => ({
 
 export function Confetti() {
   const [particles, setParticles] = useState<ConfettiParticle[]>([]);
+  const animationFrameRef = useRef<number | null>(null);
+  const isAnimatingRef = useRef<boolean>(false);
+  const isMountedRef = useRef<boolean>(false);
+  const frameCountRef = useRef<number>(0);
+  const maxFrames = 600; // Auto-stop after ~10 seconds at 60fps
 
-  useEffect(() => {
-    const initialParticles = Array.from({ length: 150 }, (_, i) => createParticle(i));
-    setParticles(initialParticles);
+  // Memoized animate function to prevent recreations
+  const animate = useCallback(() => {
+    // Safety check: ensure we're still mounted and should be animating
+    if (!isMountedRef.current || !isAnimatingRef.current) {
+      return;
+    }
 
-    const animationFrame = requestAnimationFrame(animate);
+    // Safety: Auto-stop after max frames to prevent infinite loops
+    frameCountRef.current++;
+    if (frameCountRef.current > maxFrames) {
+      isAnimatingRef.current = false;
+      return;
+    }
 
-    function animate() {
+    try {
       setParticles(prevParticles => {
-        const updatedParticles = prevParticles.map(p => {
-          let newY = p.y + p.vy;
-          let newX = p.x + p.vx;
-          let newRotation = p.rotation + p.vr;
+        // Safety: Ensure particles exist
+        if (!prevParticles || prevParticles.length === 0) {
+          return prevParticles;
+        }
 
-          if (newY > 110) {
-            return createParticle(p.id);
+        const updatedParticles = prevParticles.map(p => {
+          try {
+            let newY = p.y + p.vy;
+            let newX = p.x + p.vx;
+            let newRotation = p.rotation + p.vr;
+
+            // Reset particle if it goes off screen
+            if (newY > 110) {
+              return createParticle(p.id);
+            }
+            return { ...p, y: newY, x: newX, rotation: newRotation };
+          } catch (err) {
+            // If individual particle fails, just return original
+            console.error('Particle update error:', err);
+            return p;
           }
-          return { ...p, y: newY, x: newX, rotation: newRotation };
         });
         return updatedParticles;
       });
 
-      requestAnimationFrame(animate);
+      // Continue animation if still mounted and animating
+      if (isMountedRef.current && isAnimatingRef.current) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    } catch (err) {
+      // If animation fails, stop gracefully
+      console.error('Confetti animation error:', err);
+      isAnimatingRef.current = false;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
     }
-    
-    return () => cancelAnimationFrame(animationFrame);
   }, []);
 
+  useEffect(() => {
+    // Mark as mounted
+    isMountedRef.current = true;
+    isAnimatingRef.current = true;
+    frameCountRef.current = 0;
+
+    // Initialize particles with error handling
+    try {
+      const initialParticles = Array.from({ length: 150 }, (_, i) => createParticle(i));
+      setParticles(initialParticles);
+    } catch (err) {
+      console.error('Failed to create confetti particles:', err);
+      return;
+    }
+
+    // Start animation with a small delay to ensure DOM is ready
+    const startTimeout = setTimeout(() => {
+      if (isMountedRef.current && isAnimatingRef.current) {
+        animationFrameRef.current = requestAnimationFrame(animate);
+      }
+    }, 50);
+
+    // Cleanup function
+    return () => {
+      // Mark as unmounted
+      isMountedRef.current = false;
+      isAnimatingRef.current = false;
+
+      // Clear timeout
+      clearTimeout(startTimeout);
+
+      // Cancel any pending animation frame
+      if (animationFrameRef.current !== null) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+
+      // Clear particles
+      setParticles([]);
+    };
+  }, [animate]);
+
+  // Don't render if no particles
+  if (!particles || particles.length === 0) {
+    return null;
+  }
+
   return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none z-50">
-      {particles.map(p => (
-        <div
-          key={p.id}
-          className="absolute w-2 h-4"
-          style={{
-            left: `${p.x}vw`,
-            top: `${p.y}vh`,
-            backgroundColor: p.color,
-            transform: `rotate(${p.rotation}deg) scale(${p.scale})`,
-            transition: 'top 0.05s linear, left 0.05s linear'
-          }}
-        />
-      ))}
+    <div className="absolute inset-0 overflow-hidden pointer-events-none z-50" aria-hidden="true">
+      {particles.map(p => {
+        try {
+          return (
+            <div
+              key={`confetti-${p.id}`}
+              className="absolute w-2 h-4 will-change-transform"
+              style={{
+                left: `${Math.max(0, Math.min(100, p.x))}vw`,
+                top: `${Math.max(-20, Math.min(120, p.y))}vh`,
+                backgroundColor: p.color,
+                transform: `rotate(${p.rotation}deg) scale(${p.scale})`,
+                transition: 'none'
+              }}
+            />
+          );
+        } catch (err) {
+          // If rendering a particle fails, skip it
+          return null;
+        }
+      })}
     </div>
   );
 }

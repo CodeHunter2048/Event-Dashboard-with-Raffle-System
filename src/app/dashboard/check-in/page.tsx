@@ -68,6 +68,9 @@ export default function CheckInPage() {
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
   const scannerRef = useRef<HTMLDivElement>(null);
   const isProcessingRef = useRef(false); // Flag to prevent multiple scans
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<Attendee[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
 
   useEffect(() => {
     const getCameraPermission = async () => {
@@ -281,46 +284,80 @@ export default function CheckInPage() {
     }
   };
 
-  const handleManualCheckin = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const handleManualCheckin = async (attendee: Attendee) => {
     if (!db) {
       toast({ variant: 'destructive', title: 'Error', description: 'Database not initialized.' });
       return;
     }
-    const formData = new FormData(event.currentTarget);
-    const id = formData.get('attendeeId') as string;
 
     try {
-      const attendeesRef = collection(db, 'attendees');
-      const q = query(attendeesRef, where('__name__', '==', id));
-      const querySnapshot = await getDocs(q);
-
-      if (querySnapshot.empty) {
-        setLastScan({ status: 'error', attendee: null, message: `Invalid ID: Attendee with ID "${id}" not found.` });
-        await logScan(id, 'Unknown', 'not-found');
-        return;
-      }
-      const attendeeDoc = querySnapshot.docs[0];
-      const attendeeData = attendeeDoc.data() as Attendee;
-      const attendee: Attendee = { ...attendeeData, id: attendeeDoc.id };
-
       if (attendee.checkedIn) {
         setLastScan({ status: 'duplicate', attendee, message: `Already checked in at ${new Date(attendee.checkInTime!).toLocaleString()}` });
-        await logScan(attendeeDoc.id, attendee.name, 'already-checked-in');
+        await logScan(attendee.id, attendee.name, 'already-checked-in');
+        toast({ variant: 'default', title: 'Already Checked In', description: `${attendee.name} was already checked in.` });
         return;
       }
-      const attendeeRef = doc(db, 'attendees', attendeeDoc.id);
+
+      const attendeeRef = doc(db, 'attendees', attendee.id);
       await updateDoc(attendeeRef, {
         checkedIn: true,
         checkInTime: serverTimestamp(),
       });
-      await logScan(attendeeDoc.id, attendee.name, 'checked-in');
+      await logScan(attendee.id, attendee.name, 'checked-in');
       setLastScan({ status: 'success', attendee: { ...attendee, checkedIn: true, checkInTime: new Date().toISOString() }, message: 'Check-in successful!' });
       toast({ title: 'Success', description: `${attendee.name} checked in successfully!` });
-      event.currentTarget.reset();
+      
+      // Clear search after successful check-in
+      setSearchQuery('');
+      setSearchResults([]);
     } catch (error: any) {
       console.error('Error with manual check-in:', error);
       toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to check in attendee.' });
+    }
+  };
+
+  const handleSearch = async (query: string) => {
+    setSearchQuery(query);
+    
+    if (!query.trim() || !db) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const attendeesRef = collection(db, 'attendees');
+      const querySnapshot = await getDocs(attendeesRef);
+      
+      const results: Attendee[] = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data() as Attendee;
+        const attendee: Attendee = { ...data, id: doc.id };
+        
+        // Search by name or organization (case-insensitive)
+        const searchLower = query.toLowerCase();
+        if (
+          attendee.name.toLowerCase().includes(searchLower) ||
+          attendee.organization.toLowerCase().includes(searchLower)
+        ) {
+          results.push(attendee);
+        }
+      });
+      
+      // Sort: unchecked first, then by name
+      results.sort((a, b) => {
+        if (a.checkedIn === b.checkedIn) {
+          return a.name.localeCompare(b.name);
+        }
+        return a.checkedIn ? 1 : -1;
+      });
+      
+      setSearchResults(results.slice(0, 10)); // Limit to 10 results
+    } catch (error: any) {
+      console.error('Error searching attendees:', error);
+      toast({ variant: 'destructive', title: 'Error', description: 'Failed to search attendees.' });
+    } finally {
+      setIsSearching(false);
     }
   };
 
@@ -409,17 +446,63 @@ export default function CheckInPage() {
           <Card>
             <CardHeader>
               <CardTitle>Manual Check-in</CardTitle>
-              <CardDescription>If the QR code is not working, enter the attendee ID here.</CardDescription>
+              <CardDescription>Search for an attendee by name or organization.</CardDescription>
             </CardHeader>
-            <form onSubmit={handleManualCheckin}>
-              <CardContent>
-                <Label htmlFor="attendeeId">Attendee ID</Label>
-                <Input id="attendeeId" name="attendeeId" placeholder="e.g., aBcDeFg12345" />
-              </CardContent>
-              <CardFooter>
-                <Button type="submit" className="w-full">Check In</Button>
-              </CardFooter>
-            </form>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="searchQuery">Search Attendee</Label>
+                <Input 
+                  id="searchQuery" 
+                  name="searchQuery" 
+                  placeholder="Search by name or organization..." 
+                  value={searchQuery}
+                  onChange={(e) => handleSearch(e.target.value)}
+                />
+              </div>
+              
+              {isSearching && (
+                <div className="flex items-center justify-center py-4">
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                  <span className="ml-2 text-sm text-muted-foreground">Searching...</span>
+                </div>
+              )}
+              
+              {!isSearching && searchResults.length > 0 && (
+                <div className="space-y-2 max-h-96 overflow-y-auto">
+                  {searchResults.map((attendee) => (
+                    <div
+                      key={attendee.id}
+                      className="flex items-center justify-between p-3 rounded-lg border bg-card hover:bg-accent transition-colors"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold truncate">{attendee.name}</p>
+                        <p className="text-sm text-muted-foreground truncate">{attendee.organization}</p>
+                        {attendee.checkedIn && (
+                          <Badge variant="secondary" className="mt-1">
+                            <CheckCircle2 className="h-3 w-3 mr-1" />
+                            Checked In
+                          </Badge>
+                        )}
+                      </div>
+                      <Button
+                        onClick={() => handleManualCheckin(attendee)}
+                        disabled={attendee.checkedIn}
+                        size="sm"
+                      >
+                        {attendee.checkedIn ? 'Already Checked In' : 'Check In'}
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {!isSearching && searchQuery && searchResults.length === 0 && (
+                <div className="text-center py-8 text-muted-foreground">
+                  <AlertCircle className="h-8 w-8 mx-auto mb-2" />
+                  <p>No attendees found matching &quot;{searchQuery}&quot;</p>
+                </div>
+              )}
+            </CardContent>
           </Card>
         </div>
       </div>

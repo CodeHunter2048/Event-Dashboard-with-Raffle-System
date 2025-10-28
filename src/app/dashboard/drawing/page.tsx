@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Confetti } from '@/components/confetti';
+import { ConfettiErrorBoundary } from '@/components/ConfettiErrorBoundary';
 import { Award, Check, Redo, Users, Trophy, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -61,6 +62,7 @@ export default function DrawingPage() {
   const [drawQuantity, setDrawQuantity] = useState(1);
   const [batchWinners, setBatchWinners] = useState<Attendee[]>([]);
   const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
+  const [confettiKey, setConfettiKey] = useState(0);
 
   // Monitor network status
   useEffect(() => {
@@ -271,6 +273,7 @@ export default function DrawingPage() {
     setTimeout(() => {
       setDrawingState('revealed');
       setShowConfetti(true);
+      setConfettiKey(prev => prev + 1); // Force new confetti instance
     }, 4000); 
   };
 
@@ -671,12 +674,14 @@ export default function DrawingPage() {
         </Card>
 
         <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isOpen) resetDraw(); else setIsModalOpen(true);}}>
-            <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0">
-                 {showConfetti && <Confetti />}
+            <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
+                 <ConfettiErrorBoundary>
+                   {showConfetti && <Confetti key={confettiKey} />}
+                 </ConfettiErrorBoundary>
                  <DialogHeader className="p-4 flex-shrink-0 border-b">
                     <DialogTitle className="text-2xl font-bold">
-                      {selectedPrize?.name}
-                      {drawQuantity > 1 && (
+                      {selectedPrize?.name || 'Prize Draw'}
+                      {drawQuantity > 1 && batchWinners.length > 0 && (
                         <span className="text-sm font-normal text-muted-foreground ml-2">
                           (Winner {currentBatchIndex + 1} of {batchWinners.length})
                         </span>

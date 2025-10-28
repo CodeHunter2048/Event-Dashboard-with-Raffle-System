@@ -1,7 +1,8 @@
 'use client';
 
-import { Calendar, Sparkles } from 'lucide-react';
+import { Calendar, Sparkles, Clock } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { Card, CardContent } from '@/components/ui/card';
 
 export default function ComingSoon() {
   const [timeLeft, setTimeLeft] = useState({
@@ -35,83 +36,134 @@ export default function ComingSoon() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center p-4 relative overflow-hidden">
-      {/* Animated background elements */}
+    <div className="h-screen relative overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-purple-950">
+      {/* Animated background with blur dots */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob"></div>
-        <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob [animation-delay:2s]"></div>
-        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-20 animate-blob [animation-delay:4s]"></div>
+        <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-500 rounded-full filter blur-3xl opacity-30 animate-blob"></div>
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-500 rounded-full filter blur-3xl opacity-30 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-500 rounded-full filter blur-3xl opacity-30 animate-blob animation-delay-4000"></div>
       </div>
 
-      <div className="max-w-4xl w-full relative z-10">
-        <div className="text-center space-y-8">
-          {/* Logo/Icon */}
-          <div className="flex justify-center mb-8">
-            <div className="relative">
-              <Sparkles className="h-20 w-20 text-yellow-400 animate-pulse" />
-              <div className="absolute inset-0 blur-xl bg-yellow-400 opacity-50"></div>
+      <div className="h-screen flex items-center justify-center p-4 lg:p-8 relative">
+        <div className="max-w-5xl w-full relative z-10">
+          <div className="text-center space-y-6">
+            {/* Logo/Icon with float animation */}
+            <div className="flex justify-center animate-float">
+              <div className="relative">
+                <div className="p-4 rounded-full bg-gradient-to-br from-yellow-400/20 to-orange-500/20 border border-yellow-400/30 backdrop-blur-sm">
+                  <Sparkles className="h-12 w-12 md:h-16 md:w-16 text-yellow-400" />
+                </div>
+                <div className="absolute inset-0 blur-2xl bg-yellow-400 opacity-30 animate-pulse"></div>
+              </div>
             </div>
-          </div>
 
-          {/* Main heading */}
-          <div className="space-y-4">
-            <h1 className="text-5xl md:text-7xl font-bold text-white mb-4 tracking-tight">
-              AI for IA
-            </h1>
-            <h2 className="text-2xl md:text-3xl font-semibold text-blue-200 mb-6">
-              Uniting Industry-Academia through Artificial Intelligence
-            </h2>
-            <div className="inline-block bg-white/10 backdrop-blur-sm rounded-lg px-6 py-3 border border-white/20">
-              <p className="text-xl md:text-2xl text-white font-medium flex items-center gap-2 justify-center">
-                <Calendar className="h-6 w-6 text-blue-300" />
-                October 29, 2025
+            {/* Main heading with gradient */}
+            <div className="space-y-4">
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30 backdrop-blur-sm">
+                <Clock className="h-5 w-5 text-cyan-400 animate-pulse" />
+                <span className="text-sm font-medium text-cyan-300">Event Countdown</span>
+              </div>
+              
+              <h1 className="text-5xl md:text-7xl font-bold tracking-tight bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
+                AI for IA
+              </h1>
+              
+              <h2 className="text-xl md:text-2xl font-semibold text-blue-200 tracking-wide">
+                Uniting Industry-Academia through Artificial Intelligence
+              </h2>
+              
+              <Card className="inline-block bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border-slate-600/50 shadow-2xl">
+                <CardContent className="p-4 md:p-6">
+                  <div className="flex items-center gap-3 text-white">
+                    <div className="p-2 rounded-lg bg-cyan-500/20">
+                      <Calendar className="h-5 w-5 md:h-6 md:w-6 text-cyan-400" />
+                    </div>
+                    <div className="text-left">
+                      <p className="text-xs md:text-sm text-slate-400">Event Date</p>
+                      <p className="text-lg md:text-xl font-bold">October 29, 2025</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Countdown Timer */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 max-w-3xl mx-auto">
+              {[
+                { label: 'Days', value: timeLeft.days, color: 'from-cyan-500 to-blue-500' },
+                { label: 'Hours', value: timeLeft.hours, color: 'from-blue-500 to-purple-500' },
+                { label: 'Minutes', value: timeLeft.minutes, color: 'from-purple-500 to-pink-500' },
+                { label: 'Seconds', value: timeLeft.seconds, color: 'from-pink-500 to-orange-500' },
+              ].map((item) => (
+                <Card
+                  key={item.label}
+                  className="bg-gradient-to-br from-slate-800/80 to-slate-900/80 backdrop-blur-md border-slate-600/50 shadow-2xl hover:shadow-cyan-500/20 transition-all duration-300 hover:scale-105"
+                >
+                  <CardContent className="p-4 md:p-6 text-center">
+                    <div className={`text-3xl md:text-5xl font-bold mb-1 bg-gradient-to-br ${item.color} bg-clip-text text-transparent`}>
+                      {item.value.toString().padStart(2, '0')}
+                    </div>
+                    <div className="text-xs md:text-sm text-slate-400 uppercase tracking-wide font-medium">
+                      {item.label}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            {/* Coming Soon Badge */}
+            <div className="mt-6">
+              <div className="inline-block relative group">
+                <div className="absolute inset-0 bg-gradient-to-r from-yellow-400 to-orange-500 rounded-full blur-xl opacity-50 group-hover:opacity-75 transition-opacity"></div>
+                <div className="relative bg-gradient-to-r from-yellow-400 to-orange-500 text-slate-900 px-6 py-3 md:px-8 md:py-4 rounded-full text-lg md:text-xl font-bold shadow-2xl transform hover:scale-105 transition-transform cursor-pointer">
+                  🚀 Coming Soon
+                </div>
+              </div>
+            </div>
+
+            {/* Description */}
+            <div className="max-w-2xl mx-auto">
+              <p className="text-base md:text-lg text-blue-100 leading-relaxed">
+                Join us for an exciting conference bringing together industry leaders and academic innovators 
+                to explore the transformative power of Artificial Intelligence.
               </p>
             </div>
           </div>
-
-          {/* Countdown Timer */}
-          <div className="grid grid-cols-4 gap-4 md:gap-8 max-w-2xl mx-auto mt-12">
-            {[
-              { label: 'Days', value: timeLeft.days },
-              { label: 'Hours', value: timeLeft.hours },
-              { label: 'Minutes', value: timeLeft.minutes },
-              { label: 'Seconds', value: timeLeft.seconds },
-            ].map((item) => (
-              <div
-                key={item.label}
-                className="bg-white/10 backdrop-blur-md rounded-xl p-4 md:p-6 border border-white/20 shadow-2xl"
-              >
-                <div className="text-3xl md:text-5xl font-bold text-white mb-2">
-                  {item.value.toString().padStart(2, '0')}
-                </div>
-                <div className="text-sm md:text-base text-blue-200 uppercase tracking-wide">
-                  {item.label}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Coming Soon Badge */}
-          <div className="mt-12">
-            <div className="inline-block bg-gradient-to-r from-yellow-400 to-orange-500 text-gray-900 px-8 py-4 rounded-full text-xl md:text-2xl font-bold shadow-2xl transform hover:scale-105 transition-transform">
-              🚀 Coming Soon
-            </div>
-          </div>
-
-          {/* Additional Info */}
-          <div className="mt-12 space-y-4 text-blue-100">
-            <p className="text-lg md:text-xl max-w-2xl mx-auto leading-relaxed">
-              Join us for an exciting conference bringing together industry leaders and academic innovators 
-              to explore the transformative power of Artificial Intelligence.
-            </p>
-            <p className="text-md text-blue-300">
-              Stay tuned for registration details and program announcements.
-            </p>
-          </div>
-
-          
         </div>
       </div>
+
+      <style jsx global>{`
+        @keyframes blob {
+          0% {
+            transform: translate(0px, 0px) scale(1);
+          }
+          33% {
+            transform: translate(30px, -50px) scale(1.1);
+          }
+          66% {
+            transform: translate(-20px, 20px) scale(0.9);
+          }
+          100% {
+            transform: translate(0px, 0px) scale(1);
+          }
+        }
+        .animate-blob {
+          animation: blob 7s infinite;
+        }
+        .animation-delay-2000 {
+          animation-delay: 2s;
+        }
+        .animation-delay-4000 {
+          animation-delay: 4s;
+        }
+        @keyframes float {
+          0%, 100% { transform: translateY(0px); }
+          50% { transform: translateY(-20px); }
+        }
+        .animate-float {
+          animation: float 3s ease-in-out infinite;
+        }
+      `}</style>
     </div>
   );
 }

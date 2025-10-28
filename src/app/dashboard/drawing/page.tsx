@@ -691,15 +691,9 @@ export default function DrawingPage() {
                     {drawingState === 'revealed' && winner && (
                         <div className="text-center animate-in fade-in zoom-in-90 flex flex-col items-center justify-center">
                             <p className="text-lg text-accent font-semibold">WINNER!</p>
-                             <div className="flex items-center gap-4 mt-4">
-                                <Avatar className="h-24 w-24 border-4 border-primary">
-                                    <AvatarImage src={PlaceHolderImages.find(p => p.id === `avatar${winner.avatar}`)?.imageUrl} alt={winner.name} />
-                                    <AvatarFallback className="text-4xl">{winner.name.split(' ').map(n=>n[0]).join('')}</AvatarFallback>
-                                </Avatar>
-                                <div>
-                                    <h3 className="text-4xl font-bold text-white">{winner.name}</h3>
-                                    <p className="text-muted-foreground text-lg">{winner.organization}</p>
-                                </div>
+                            <div className="mt-4">
+                                <h3 className="text-4xl font-bold text-foreground">{winner.name}</h3>
+                                <p className="text-muted-foreground text-lg">{winner.organization}</p>
                             </div>
                         </div>
                     )}

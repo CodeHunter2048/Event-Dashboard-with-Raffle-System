@@ -227,7 +227,7 @@ export default function DisplayPage() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-4xl font-bold text-white">{totalAttendees}</p>
-                  <p className="text-sm text-purple-200 mt-1">Delegates</p>
+                  <p className="text-sm text-purple-200 mt-1">Attendees</p>
                 </CardContent>
               </Card>
             </aside>

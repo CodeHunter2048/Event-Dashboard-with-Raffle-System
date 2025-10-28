@@ -34,9 +34,11 @@ import { db } from '@/lib/firebase';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import withAuth from '@/components/withAuth';
 import { Attendee, Prize } from '@/lib/data';
+import { useAuth } from '@/hooks/use-auth';
 
 
 function Dashboard() {
+  const { isPresenter } = useAuth();
   const [totalAttendees, setTotalAttendees] = useState(0);
   const [checkedInCount, setCheckedInCount] = useState(0);
   const [recentCheckins, setRecentCheckins] = useState<Attendee[]>([]);
@@ -285,9 +287,11 @@ function Dashboard() {
                 </CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
-                <Link href="/dashboard/check-in" passHref>
-                    <Button className="w-full" size="lg">Start Check-in</Button>
-                </Link>
+                {!isPresenter && (
+                  <Link href="/dashboard/check-in" passHref>
+                      <Button className="w-full" size="lg">Start Check-in</Button>
+                  </Link>
+                )}
                 <Link href="/dashboard/drawing" passHref>
                     <Button className="w-full" size="lg" variant="secondary">Start Prize Drawing</Button>
                 </Link>

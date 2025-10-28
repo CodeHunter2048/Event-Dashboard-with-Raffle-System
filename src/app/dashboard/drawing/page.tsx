@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
 import { Confetti } from '@/components/confetti';
 import { Award, Check, Redo, Users, Trophy, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -597,22 +598,20 @@ export default function DrawingPage() {
               {maxDrawQuantity > 1 && (
                 <div className="mt-4 space-y-2">
                   <label className="text-sm font-medium">Draw Quantity</label>
-                  <Select 
-                    value={drawQuantity.toString()} 
-                    onValueChange={(val) => setDrawQuantity(parseInt(val))}
+                  <Input
+                    type="number"
+                    min={1}
+                    max={maxDrawQuantity}
+                    value={drawQuantity}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                      const value = parseInt(e.target.value);
+                      if (!isNaN(value) && value >= 1 && value <= maxDrawQuantity) {
+                        setDrawQuantity(value);
+                      }
+                    }}
                     disabled={drawingState !== 'idle'}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Array.from({ length: maxDrawQuantity }, (_, i) => i + 1).map(num => (
-                        <SelectItem key={num} value={num.toString()}>
-                          {num} {num === 1 ? 'Winner' : 'Winners'}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    className="w-full"
+                  />
                   <p className="text-xs text-muted-foreground">
                     Draw multiple winners at once (max: {maxDrawQuantity})
                   </p>

@@ -4,13 +4,23 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { analyzeCheckinData } from './actions';
 import { DetectSuspiciousCheckinsOutput } from '@/ai/flows/detect-suspicious-checkins';
-import { Loader2, ShieldAlert, Bot, ChevronDown, ChevronUp, AlertTriangle } from 'lucide-react';
+import { Loader2, ShieldAlert, Bot, ChevronDown, ChevronUp, AlertTriangle, RotateCcw } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, query, orderBy, limit, onSnapshot, addDoc, serverTimestamp, getDocs, writeBatch, updateDoc, doc } from 'firebase/firestore';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface ScanLog {
   id: string;
@@ -53,6 +63,8 @@ export default function SecurityPage() {
   const [loginLogs, setLoginLogs] = useState<LoginLog[]>([]);
   const [savedAnalyses, setSavedAnalyses] = useState<AnalysisResult[]>([]);
   const [expandedAnalysis, setExpandedAnalysis] = useState<string | null>(null);
+  const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
 
   // Fetch scan logs in real-time
   useEffect(() => {
@@ -180,6 +192,73 @@ export default function SecurityPage() {
     }
   };
 
+  const handleResetCheckIns = async () => {
+    if (!db) return;
+    
+    setIsResetting(true);
+    try {
+      let attendeeCount = 0;
+      let winnerCount = 0;
+      let scanLogCount = 0;
+      
+      // Reset attendees check-in status
+      const attendeesSnapshot = await getDocs(collection(db, 'attendees'));
+      const attendeeBatch = writeBatch(db);
+      
+      attendeesSnapshot.forEach((attendeeDoc) => {
+        attendeeBatch.update(attendeeDoc.ref, {
+          checkedIn: false,
+          checkInTime: null
+        });
+        attendeeCount++;
+      });
+      
+      await attendeeBatch.commit();
+      
+      // Delete all winners
+      const winnersSnapshot = await getDocs(collection(db, 'winners'));
+      const winnerBatch = writeBatch(db);
+      
+      winnersSnapshot.forEach((winnerDoc) => {
+        winnerBatch.delete(winnerDoc.ref);
+        winnerCount++;
+      });
+      
+      if (winnerCount > 0) {
+        await winnerBatch.commit();
+      }
+      
+      // Delete all scan logs
+      const scanLogsSnapshot = await getDocs(collection(db, 'scanlogs'));
+      const scanLogBatch = writeBatch(db);
+      
+      scanLogsSnapshot.forEach((scanLogDoc) => {
+        scanLogBatch.delete(scanLogDoc.ref);
+        scanLogCount++;
+      });
+      
+      if (scanLogCount > 0) {
+        await scanLogBatch.commit();
+      }
+      
+      toast({
+        title: 'Success',
+        description: `Reset complete: ${attendeeCount} check-ins, ${winnerCount} winners, and ${scanLogCount} scan logs cleared.`,
+      });
+      
+      setResetDialogOpen(false);
+    } catch (error: any) {
+      console.error('Error resetting data:', error);
+      toast({
+        variant: 'destructive',
+        title: 'Reset Failed',
+        description: error.message || 'Failed to reset check-in records.',
+      });
+    } finally {
+      setIsResetting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Card>
@@ -192,16 +271,35 @@ export default function SecurityPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button onClick={handleAnalysis} disabled={isLoading}>
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              'Analyze Check-in Data'
-            )}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={handleAnalysis} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Analyzing...
+                </>
+              ) : (
+                'Analyze Check-in Data'
+              )}
+            </Button>
+            <Button 
+              onClick={() => setResetDialogOpen(true)} 
+              disabled={isResetting}
+              variant="destructive"
+            >
+              {isResetting ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Resetting...
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="mr-2 h-4 w-4" />
+                  Reset Check-ins
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -466,6 +564,27 @@ export default function SecurityPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Reset Check-ins Confirmation Dialog */}
+      <AlertDialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Check-ins, Winners & Logs?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove all check-in records for all attendees, delete all winner records, and clear all scan logs. This action is typically used to clear test data before the actual event. Are you sure you want to continue?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetCheckIns}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Reset All Data
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

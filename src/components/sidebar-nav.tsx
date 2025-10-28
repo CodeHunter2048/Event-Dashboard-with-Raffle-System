@@ -35,7 +35,7 @@ const navItems = [
 
 export function SidebarNav() {
   const pathname = usePathname();
-  const { isAdmin } = useAuth();
+  const { isAdmin, isPresenter, userAccount } = useAuth();
 
   // Filter navigation items based on user role
   const filteredNavItems = navItems.filter((item) => {
@@ -43,6 +43,14 @@ export function SidebarNav() {
     if (item.href === '/dashboard/analytics' || item.href === '/dashboard/security') {
       return isAdmin;
     }
+    
+    // Presenters only have access to Dashboard, Prizes, and Draw
+    if (isPresenter) {
+      return item.href === '/dashboard' || 
+             item.href === '/dashboard/prizes' || 
+             item.href === '/dashboard/drawing';
+    }
+    
     return true;
   });
 

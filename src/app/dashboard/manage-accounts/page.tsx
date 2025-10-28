@@ -54,7 +54,7 @@ interface UserAccount {
   email: string;
   displayName: string;
   organization: string;
-  role: 'admin' | 'organizer' | 'attendee';
+  role: 'admin' | 'organizer' | 'presenter';
   createdAt?: any;
   docId?: string;
 }
@@ -76,7 +76,7 @@ export default function ManageAccountsPage() {
     password: '',
     displayName: '',
     organization: '',
-    role: 'attendee' as 'admin' | 'organizer' | 'attendee',
+    role: 'presenter' as 'admin' | 'organizer' | 'presenter',
   });
   const [newPassword, setNewPassword] = useState('');
 
@@ -111,7 +111,7 @@ export default function ManageAccountsPage() {
           email: data.email || '',
           displayName: data.displayName || 'User',
           organization: data.organization || '',
-          role: (data.role as UserAccount['role']) || 'attendee',
+          role: (data.role as UserAccount['role']) || 'presenter',
           createdAt: data.createdAt,
           docId: accountDoc.id,
         } as UserAccount;
@@ -167,7 +167,7 @@ export default function ManageAccountsPage() {
         password: '',
         displayName: '',
         organization: '',
-        role: 'attendee',
+        role: 'presenter',
       });
       fetchAccounts();
     } catch (error: any) {
@@ -356,7 +356,7 @@ export default function ManageAccountsPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="attendee">Attendee</SelectItem>
+                      <SelectItem value="presenter">Presenter</SelectItem>
                       <SelectItem value="organizer">Organizer</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
                     </SelectContent>
@@ -480,7 +480,7 @@ export default function ManageAccountsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="attendee">Attendee</SelectItem>
+                    <SelectItem value="presenter">Presenter</SelectItem>
                     <SelectItem value="organizer">Organizer</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>

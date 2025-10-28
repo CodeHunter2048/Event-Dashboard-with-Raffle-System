@@ -69,6 +69,7 @@ import QRCode from 'qrcode';
 import Papa from 'papaparse';
 import * as XLSX from 'xlsx';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAuth } from '@/hooks/use-auth';
 
 interface ImportedAttendee {
   name: string;
@@ -79,6 +80,7 @@ interface ImportedAttendee {
 
 export default function AttendeesPage() {
   const { toast } = useToast();
+  const { isAdmin } = useAuth();
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -690,7 +692,7 @@ export default function AttendeesPage() {
           </TabsTrigger>
         </TabsList>
         <div className="ml-auto flex items-center gap-2">
-          {selectedAttendees.size > 0 && (
+          {selectedAttendees.size > 0 && isAdmin && (
             <Button 
               size="sm" 
               variant="destructive" 
@@ -927,26 +929,28 @@ export default function AttendeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={
-                        getFilteredAttendees(attendees).length > 0 &&
-                        getFilteredAttendees(attendees).every(a => selectedAttendees.has(a.id))
-                      }
-                      onCheckedChange={() => {
-                        const filtered = getFilteredAttendees(attendees);
-                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
-                        const newSelected = new Set(selectedAttendees);
-                        
-                        if (allSelected) {
-                          filtered.forEach(a => newSelected.delete(a.id));
-                        } else {
-                          filtered.forEach(a => newSelected.add(a.id));
+                  {isAdmin && (
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={
+                          getFilteredAttendees(attendees).length > 0 &&
+                          getFilteredAttendees(attendees).every(a => selectedAttendees.has(a.id))
                         }
-                        setSelectedAttendees(newSelected);
-                      }}
-                    />
-                  </TableHead>
+                        onCheckedChange={() => {
+                          const filtered = getFilteredAttendees(attendees);
+                          const allSelected = filtered.every(a => selectedAttendees.has(a.id));
+                          const newSelected = new Set(selectedAttendees);
+                          
+                          if (allSelected) {
+                            filtered.forEach(a => newSelected.delete(a.id));
+                          } else {
+                            filtered.forEach(a => newSelected.add(a.id));
+                          }
+                          setSelectedAttendees(newSelected);
+                        }}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead className="hidden w-[100px] sm:table-cell">
                     <span className="sr-only">Avatar</span>
                   </TableHead>
@@ -968,12 +972,14 @@ export default function AttendeesPage() {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedAttendees.has(attendee.id)}
-                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
-                        />
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedAttendees.has(attendee.id)}
+                            onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="hidden sm:table-cell">
                         <Avatar className="h-10 w-10">
                           {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}
@@ -1110,26 +1116,28 @@ export default function AttendeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={
-                        getFilteredAttendees(attendees.filter(a => a.checkedIn)).length > 0 &&
-                        getFilteredAttendees(attendees.filter(a => a.checkedIn)).every(a => selectedAttendees.has(a.id))
-                      }
-                      onCheckedChange={() => {
-                        const filtered = getFilteredAttendees(attendees.filter(a => a.checkedIn));
-                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
-                        const newSelected = new Set(selectedAttendees);
-                        
-                        if (allSelected) {
-                          filtered.forEach(a => newSelected.delete(a.id));
-                        } else {
-                          filtered.forEach(a => newSelected.add(a.id));
+                  {isAdmin && (
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={
+                          getFilteredAttendees(attendees.filter(a => a.checkedIn)).length > 0 &&
+                          getFilteredAttendees(attendees.filter(a => a.checkedIn)).every(a => selectedAttendees.has(a.id))
                         }
-                        setSelectedAttendees(newSelected);
-                      }}
-                    />
-                  </TableHead>
+                        onCheckedChange={() => {
+                          const filtered = getFilteredAttendees(attendees.filter(a => a.checkedIn));
+                          const allSelected = filtered.every(a => selectedAttendees.has(a.id));
+                          const newSelected = new Set(selectedAttendees);
+                          
+                          if (allSelected) {
+                            filtered.forEach(a => newSelected.delete(a.id));
+                          } else {
+                            filtered.forEach(a => newSelected.add(a.id));
+                          }
+                          setSelectedAttendees(newSelected);
+                        }}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead className="hidden w-[100px] sm:table-cell">
                     <span className="sr-only">Avatar</span>
                   </TableHead>
@@ -1151,12 +1159,14 @@ export default function AttendeesPage() {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedAttendees.has(attendee.id)}
-                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
-                        />
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedAttendees.has(attendee.id)}
+                            onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="hidden sm:table-cell">
                         <Avatar className="h-10 w-10">
                           {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}
@@ -1291,26 +1301,28 @@ export default function AttendeesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[50px]">
-                    <Checkbox
-                      checked={
-                        getFilteredAttendees(attendees.filter(a => !a.checkedIn)).length > 0 &&
-                        getFilteredAttendees(attendees.filter(a => !a.checkedIn)).every(a => selectedAttendees.has(a.id))
-                      }
-                      onCheckedChange={() => {
-                        const filtered = getFilteredAttendees(attendees.filter(a => !a.checkedIn));
-                        const allSelected = filtered.every(a => selectedAttendees.has(a.id));
-                        const newSelected = new Set(selectedAttendees);
-                        
-                        if (allSelected) {
-                          filtered.forEach(a => newSelected.delete(a.id));
-                        } else {
-                          filtered.forEach(a => newSelected.add(a.id));
+                  {isAdmin && (
+                    <TableHead className="w-[50px]">
+                      <Checkbox
+                        checked={
+                          getFilteredAttendees(attendees.filter(a => !a.checkedIn)).length > 0 &&
+                          getFilteredAttendees(attendees.filter(a => !a.checkedIn)).every(a => selectedAttendees.has(a.id))
                         }
-                        setSelectedAttendees(newSelected);
-                      }}
-                    />
-                  </TableHead>
+                        onCheckedChange={() => {
+                          const filtered = getFilteredAttendees(attendees.filter(a => !a.checkedIn));
+                          const allSelected = filtered.every(a => selectedAttendees.has(a.id));
+                          const newSelected = new Set(selectedAttendees);
+                          
+                          if (allSelected) {
+                            filtered.forEach(a => newSelected.delete(a.id));
+                          } else {
+                            filtered.forEach(a => newSelected.add(a.id));
+                          }
+                          setSelectedAttendees(newSelected);
+                        }}
+                      />
+                    </TableHead>
+                  )}
                   <TableHead className="hidden w-[100px] sm:table-cell">
                     <span className="sr-only">Avatar</span>
                   </TableHead>
@@ -1332,12 +1344,14 @@ export default function AttendeesPage() {
                   const avatar = PlaceHolderImages.find(p => p.id === `avatar${attendee.avatar}`);
                   return (
                     <TableRow key={attendee.id}>
-                      <TableCell>
-                        <Checkbox
-                          checked={selectedAttendees.has(attendee.id)}
-                          onCheckedChange={() => toggleSelectAttendee(attendee.id)}
-                        />
-                      </TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <Checkbox
+                            checked={selectedAttendees.has(attendee.id)}
+                            onCheckedChange={() => toggleSelectAttendee(attendee.id)}
+                          />
+                        </TableCell>
+                      )}
                       <TableCell className="hidden sm:table-cell">
                         <Avatar className="h-10 w-10">
                           {avatar && <AvatarImage src={avatar.imageUrl} alt={attendee.name} data-ai-hint={avatar.imageHint} />}

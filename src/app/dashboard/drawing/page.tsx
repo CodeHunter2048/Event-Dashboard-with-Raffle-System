@@ -57,6 +57,9 @@ export default function DrawingPage() {
   const [isConfirmed, setIsConfirmed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const [pendingSync, setPendingSync] = useState(false);
+  const [drawQuantity, setDrawQuantity] = useState(1);
+  const [batchWinners, setBatchWinners] = useState<Attendee[]>([]);
+  const [currentBatchIndex, setCurrentBatchIndex] = useState(0);
 
   // Monitor network status
   useEffect(() => {
@@ -208,34 +211,76 @@ export default function DrawingPage() {
     resetDraw();
   };
 
+  const maxDrawQuantity = useMemo(() => {
+    if (!selectedPrize) return 1;
+    return Math.min(
+      selectedPrize.remaining,
+      eligiblePool.length,
+      10 // Cap at 10 for practical reasons
+    );
+  }, [selectedPrize, eligiblePool.length]);
+
+  useEffect(() => {
+    // Reset draw quantity when it exceeds max
+    if (drawQuantity > maxDrawQuantity) {
+      setDrawQuantity(Math.max(1, maxDrawQuantity));
+    }
+  }, [maxDrawQuantity, drawQuantity]);
+
   const startDrawing = () => {
     if (!selectedPrize || eligiblePool.length === 0 || (selectedPrize?.remaining ?? 0) <= 0) {
       return;
     }
+
+    // Select multiple winners for batch draw
+    const pool = [...eligiblePool];
+    const selectedWinners: Attendee[] = [];
+    const actualDrawCount = Math.min(drawQuantity, pool.length, selectedPrize.remaining);
+
+    for (let i = 0; i < actualDrawCount; i++) {
+      const randomIndex = Math.floor(Math.random() * pool.length);
+      selectedWinners.push(pool[randomIndex]);
+      pool.splice(randomIndex, 1); // Remove selected winner from pool
+    }
+
+    setBatchWinners(selectedWinners);
+    setCurrentBatchIndex(0);
     setDrawingState('drawing');
     setShowConfetti(false);
     setIsModalOpen(true);
     
-    // Build a longer, lively sequence of names that ends with the winner
-    // Ensure we always have enough entries to animate even with a tiny pool
-    const pool = eligiblePool.length > 0 ? eligiblePool : [];
-    const finalWinner = pool[Math.floor(Math.random() * pool.length)];
-    setWinner(finalWinner);
+    // Start animating the first winner
+    animateWinner(selectedWinners[0]);
+  };
 
+  const animateWinner = (winnerToShow: Attendee) => {
+    setWinner(winnerToShow);
+    
+    // Build animation sequence
+    const pool = eligiblePool.length > 0 ? eligiblePool : [];
     const picks: string[] = [];
     const targetLength = Math.max(40, Math.min(80, pool.length * 3));
     for (let i = 0; i < targetLength - 1; i++) {
       const p = pool[Math.floor(Math.random() * pool.length)];
       picks.push(p.name);
     }
-    // Guarantee the last item is the chosen winner
-    picks.push(finalWinner.name);
+    picks.push(winnerToShow.name);
     setShuffledNames(picks);
 
     setTimeout(() => {
       setDrawingState('revealed');
       setShowConfetti(true);
     }, 4000); 
+  };
+
+  const showNextWinner = () => {
+    if (currentBatchIndex < batchWinners.length - 1) {
+      const nextIndex = currentBatchIndex + 1;
+      setCurrentBatchIndex(nextIndex);
+      setDrawingState('drawing');
+      setShowConfetti(false);
+      animateWinner(batchWinners[nextIndex]);
+    }
   };
 
   const confirmWinner = async () => {
@@ -253,63 +298,70 @@ export default function DrawingPage() {
     }
     
     try {
-      const database = db!; // Firestore is guaranteed in client env
+      const database = db!;
       const batch = writeBatch(database);
 
-      // 1. Create a new winner document
-      const winnerRef = doc(collection(database, "winners"));
-      batch.set(winnerRef, {
-        attendeeId: winner.id,
-        attendeeName: winner.name,
-        attendeeOrganization: winner.organization,
-        attendeeAvatar: winner.avatar,
-        prizeId: selectedPrize.id,
-        prizeName: selectedPrize.name,
-        prizeTier: selectedPrize.tier,
-        prizeDescription: selectedPrize.description,
-        timestamp: serverTimestamp(),
-        claimed: false,
+      // For batch draws, confirm all winners at once
+      const winnersToConfirm = drawQuantity > 1 ? batchWinners : [winner];
+      
+      winnersToConfirm.forEach((winnerAttendee) => {
+        // 1. Create a new winner document
+        const winnerRef = doc(collection(database, "winners"));
+        batch.set(winnerRef, {
+          attendeeId: winnerAttendee.id,
+          attendeeName: winnerAttendee.name,
+          attendeeOrganization: winnerAttendee.organization,
+          attendeeAvatar: winnerAttendee.avatar,
+          prizeId: selectedPrize.id,
+          prizeName: selectedPrize.name,
+          prizeTier: selectedPrize.tier,
+          prizeDescription: selectedPrize.description,
+          timestamp: serverTimestamp(),
+          claimed: false,
+        });
       });
 
       // 2. Update the prize's remaining quantity
       const prizeRef = doc(database, "prizes", selectedPrize.id);
-      batch.update(prizeRef, { remaining: selectedPrize.remaining - 1 });
+      batch.update(prizeRef, { remaining: selectedPrize.remaining - winnersToConfirm.length });
       
-      // Commit the batch (will be queued if offline)
+      // Commit the batch
       await batch.commit();
 
       // 3. Update local state optimistically
-      // Update the prize quantity locally without fetching
       setAllPrizes(prevPrizes => 
         prevPrizes.map(p => 
           p.id === selectedPrize.id 
-            ? { ...p, remaining: Math.max(0, p.remaining - 1) }
+            ? { ...p, remaining: Math.max(0, p.remaining - winnersToConfirm.length) }
             : p
         )
       );
       
-      // Update the selected prize
-      setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - 1) } : null);
+      setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - winnersToConfirm.length) } : null);
       
-      // Remove winner from eligible pool
-      setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
+      // Remove all winners from eligible pool
+      const winnerIds = new Set(winnersToConfirm.map(w => w.id));
+      setEligiblePool(prevPool => prevPool.filter(a => !winnerIds.has(a.id)));
       
       // Add to winners list optimistically
-      const newWinner: Winner = {
-        attendee: winner,
+      const newWinners: Winner[] = winnersToConfirm.map(w => ({
+        attendee: w,
         prize: selectedPrize,
         timestamp: new Date().toISOString()
-      };
-      setWinnersList(prev => [newWinner, ...prev].slice(0, 10));
+      }));
+      setWinnersList(prev => [...newWinners, ...prev].slice(0, 10));
+
+      const message = drawQuantity > 1 
+        ? `${winnersToConfirm.length} winners confirmed for ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}`
+        : `${winner.name} won the ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}`;
 
       toast({ 
-        title: "Winner Confirmed!", 
-        description: `${winner.name} won the ${selectedPrize.name}.${!isOnline ? ' (Will sync when online)' : ''}` 
+        title: "Winner(s) Confirmed!", 
+        description: message
       });
       
       setIsConfirmed(true);
       
-      // Data will auto-sync via real-time listeners
       if (isOnline) {
         setPendingSync(false);
       }
@@ -317,37 +369,40 @@ export default function DrawingPage() {
     } catch (error) {
       console.error("Error confirming winner:", error);
       
-      // If offline, the write is cached by Firebase
       if (!isOnline) {
         // Still update local state optimistically
+        const winnersToConfirm = drawQuantity > 1 ? batchWinners : [winner];
+        
         setAllPrizes(prevPrizes => 
           prevPrizes.map(p => 
             p.id === selectedPrize.id 
-              ? { ...p, remaining: Math.max(0, p.remaining - 1) }
+              ? { ...p, remaining: Math.max(0, p.remaining - winnersToConfirm.length) }
               : p
           )
         );
         
-        setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - 1) } : null);
-        setEligiblePool(prevPool => prevPool.filter(a => a.id !== winner.id));
+        setSelectedPrize(prev => prev ? { ...prev, remaining: Math.max(0, prev.remaining - winnersToConfirm.length) } : null);
         
-        const newWinner: Winner = {
-          attendee: winner,
+        const winnerIds = new Set(winnersToConfirm.map(w => w.id));
+        setEligiblePool(prevPool => prevPool.filter(a => !winnerIds.has(a.id)));
+        
+        const newWinners: Winner[] = winnersToConfirm.map(w => ({
+          attendee: w,
           prize: selectedPrize,
           timestamp: new Date().toISOString()
-        };
-        setWinnersList(prev => [newWinner, ...prev].slice(0, 10));
+        }));
+        setWinnersList(prev => [...newWinners, ...prev].slice(0, 10));
         
         toast({ 
           title: "Saved Offline", 
-          description: "Winner will be synced automatically when connection returns.",
+          description: "Winner(s) will be synced automatically when connection returns.",
           variant: "default"
         });
         setIsConfirmed(true);
       } else {
         toast({ 
           title: "Error", 
-          description: "Could not save the winner. Please try again.", 
+          description: "Could not save the winner(s). Please try again.", 
           variant: "destructive" 
         });
         setIsConfirming(false);
@@ -358,7 +413,12 @@ export default function DrawingPage() {
   const redraw = () => {
     if (!winner) return;
     setShowRedrawConfirm(false);
-    setEligiblePool(pool => pool.filter(p => p.id !== winner.id));
+    
+    // For batch draws, exclude all current batch winners
+    const winnersToExclude = drawQuantity > 1 ? batchWinners : [winner];
+    const excludeIds = new Set(winnersToExclude.map(w => w.id));
+    setEligiblePool(pool => pool.filter(p => !excludeIds.has(p.id)));
+    
     resetDraw(false); 
     startDrawing();
   };
@@ -383,6 +443,8 @@ export default function DrawingPage() {
     setIsConfirming(false);
     setIsConfirmed(false);
     setShowRedrawConfirm(false);
+    setBatchWinners([]);
+    setCurrentBatchIndex(0);
     if (closeModal) {
       setIsModalOpen(false);
     }
@@ -531,6 +593,32 @@ export default function DrawingPage() {
                   <p className="text-muted-foreground mt-1">{eligiblePool.length} people are eligible to win.</p>
                 </div>
               </div>
+
+              {maxDrawQuantity > 1 && (
+                <div className="mt-4 space-y-2">
+                  <label className="text-sm font-medium">Draw Quantity</label>
+                  <Select 
+                    value={drawQuantity.toString()} 
+                    onValueChange={(val) => setDrawQuantity(parseInt(val))}
+                    disabled={drawingState !== 'idle'}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Array.from({ length: maxDrawQuantity }, (_, i) => i + 1).map(num => (
+                        <SelectItem key={num} value={num.toString()}>
+                          {num} {num === 1 ? 'Winner' : 'Winners'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    Draw multiple winners at once (max: {maxDrawQuantity})
+                  </p>
+                </div>
+              )}
+
                <Button
                  className="w-full mt-4"
                  size="lg"
@@ -541,7 +629,9 @@ export default function DrawingPage() {
                    ? 'No Eligible Attendees'
                    : (selectedPrize?.remaining ?? 0) <= 0
                      ? 'Out of Stock'
-                     : 'Start Draw'}
+                     : drawQuantity > 1
+                       ? `Draw ${drawQuantity} Winners`
+                       : 'Start Draw'}
                </Button>
             </CardContent>
           </Card>
@@ -585,7 +675,14 @@ export default function DrawingPage() {
             <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0">
                  {showConfetti && <Confetti />}
                  <DialogHeader className="p-4 flex-shrink-0 border-b">
-                    <DialogTitle className="text-2xl font-bold">{selectedPrize?.name}</DialogTitle>
+                    <DialogTitle className="text-2xl font-bold">
+                      {selectedPrize?.name}
+                      {drawQuantity > 1 && (
+                        <span className="text-sm font-normal text-muted-foreground ml-2">
+                          (Winner {currentBatchIndex + 1} of {batchWinners.length})
+                        </span>
+                      )}
+                    </DialogTitle>
                  </DialogHeader>
                 <div className="flex-grow flex flex-col items-center justify-center text-center p-6 bg-background/80 overflow-hidden">
                     {drawingState === 'idle' && <div className="flex items-center justify-center h-full"><Trophy className="h-32 w-32 text-yellow-400 animate-pulse"/></div>}
@@ -610,27 +707,44 @@ export default function DrawingPage() {
                     {drawingState === 'revealed' && !isConfirmed && (
                         <>
                         {!showRedrawConfirm ? (
-                            <div className="grid grid-cols-2 gap-4">
-                                <Button size="lg" variant="outline" onClick={handleRedrawClick} disabled={isConfirming}>
-                                    <Redo className="mr-2 h-4 w-4" /> Redraw
+                            <div className="space-y-3">
+                              {/* Show navigation for batch draws */}
+                              {drawQuantity > 1 && currentBatchIndex < batchWinners.length - 1 && (
+                                <Button 
+                                  size="lg" 
+                                  className="w-full" 
+                                  onClick={showNextWinner}
+                                  disabled={isConfirming}
+                                >
+                                  Show Next Winner ({currentBatchIndex + 2} of {batchWinners.length})
                                 </Button>
-                                <Button size="lg" onClick={confirmWinner} disabled={isConfirming}>
-                                    {isConfirming ? (
-                                        <>
-                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                            Confirming...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Check className="mr-2 h-4 w-4" /> Confirm Winner
-                                        </>
-                                    )}
-                                </Button>
+                              )}
+                              
+                              {/* Show confirm/redraw when on last winner or single draw */}
+                              {(drawQuantity === 1 || currentBatchIndex === batchWinners.length - 1) && (
+                                <div className="grid grid-cols-2 gap-4">
+                                  <Button size="lg" variant="outline" onClick={handleRedrawClick} disabled={isConfirming}>
+                                      <Redo className="mr-2 h-4 w-4" /> Redraw {drawQuantity > 1 ? 'All' : ''}
+                                  </Button>
+                                  <Button size="lg" onClick={confirmWinner} disabled={isConfirming}>
+                                      {isConfirming ? (
+                                          <>
+                                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                              Confirming...
+                                          </>
+                                      ) : (
+                                          <>
+                                              <Check className="mr-2 h-4 w-4" /> Confirm {drawQuantity > 1 ? `${batchWinners.length} Winners` : 'Winner'}
+                                          </>
+                                      )}
+                                  </Button>
+                                </div>
+                              )}
                             </div>
                         ) : (
                             <div className="space-y-3">
                                 <p className="text-center text-sm text-muted-foreground">
-                                    Are you sure you want to redraw? This will exclude <span className="font-semibold">{winner?.name}</span> from the pool.
+                                    Are you sure you want to redraw? This will exclude {drawQuantity > 1 ? `all ${batchWinners.length} selected winners` : <span className="font-semibold">{winner?.name}</span>} from the pool.
                                 </p>
                                 <div className="grid grid-cols-2 gap-4">
                                     <Button size="lg" variant="outline" onClick={cancelRedraw}>

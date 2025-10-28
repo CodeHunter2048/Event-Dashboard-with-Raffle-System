@@ -22,7 +22,7 @@ export interface UserAccount {
   email: string;
   displayName: string;
   organization: string;
-  role: 'admin' | 'organizer' | 'attendee';
+  role: 'admin' | 'organizer' | 'presenter';
   createdAt?: any;
   docId?: string;
 }
@@ -70,7 +70,7 @@ export function useAuth() {
               email: accountData.email || firebaseUser.email || '',
               displayName: accountData.displayName || firebaseUser.displayName || 'User',
               organization: accountData.organization || '',
-              role: (accountData.role as UserAccount['role']) || 'attendee',
+              role: (accountData.role as UserAccount['role']) || 'presenter',
               createdAt: accountData.createdAt,
               docId: docId,
             });
@@ -81,7 +81,7 @@ export function useAuth() {
               email: firebaseUser.email || '',
               displayName: firebaseUser.displayName || 'User',
               organization: '',
-              role: 'attendee',
+              role: 'presenter',
             });
           }
         } catch (error: any) {
@@ -106,5 +106,6 @@ export function useAuth() {
     loading,
     isAdmin: userAccount?.role === 'admin',
     isOrganizer: userAccount?.role === 'organizer' || userAccount?.role === 'admin',
+    isPresenter: userAccount?.role === 'presenter',
   };
 }

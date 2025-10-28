@@ -149,7 +149,7 @@ Event-Dashboard-with-Raffle-System/
    FIREBASE_SERVICE_ACCOUNT=your_base64_encoded_service_account
 
    # Google AI
-   GOOGLE_GENAI_API_KEY=your_google_ai_api_key
+   GOOGLE_GEMINI_API_KEY=your_google_ai_api_key
    ```
 
 5. **Initialize Firestore security rules**
@@ -292,7 +292,7 @@ This project is deployed on **Vercel**, the recommended platform for Next.js app
    NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
    NEXT_PUBLIC_FIREBASE_APP_ID
    FIREBASE_SERVICE_ACCOUNT
-   GOOGLE_GENAI_API_KEY
+   GOOGLE_GEMINI_API_KEY
    ```
 
 3. **Deploy**

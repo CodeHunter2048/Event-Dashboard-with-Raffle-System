@@ -6,7 +6,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
 import { Confetti } from '@/components/confetti';
-import { ConfettiErrorBoundary } from '@/components/ConfettiErrorBoundary';
 import { Award, Check, Redo, Users, Trophy, Loader2, Wifi, WifiOff } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -675,9 +674,7 @@ export default function DrawingPage() {
 
         <Dialog open={isModalOpen} onOpenChange={(isOpen) => { if (!isOpen) resetDraw(); else setIsModalOpen(true);}}>
             <DialogContent className="sm:max-w-3xl h-3/4 flex flex-col p-0 gap-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
-                 <ConfettiErrorBoundary>
-                   {showConfetti && <Confetti key={confettiKey} />}
-                 </ConfettiErrorBoundary>
+                 {showConfetti && <Confetti key={confettiKey} />}
                  <DialogHeader className="p-4 flex-shrink-0 border-b">
                     <DialogTitle className="text-2xl font-bold">
                       {selectedPrize?.name || 'Prize Draw'}

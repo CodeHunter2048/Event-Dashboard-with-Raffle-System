@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -158,7 +158,7 @@ export default function AnalyticsPage() {
     };
   }, [toast]);
 
-  // Calculate check-in trend by hour
+  // Calculate check-in trend with 15-minute intervals
   const calculateCheckInTrend = (attendeesData: Attendee[]) => {
     const checkedInAttendees = attendeesData.filter(a => a.checkedIn && a.checkInTime);
     
@@ -167,35 +167,37 @@ export default function AnalyticsPage() {
       return;
     }
 
-    // Group check-ins by hour
-    const hourlyData: { [key: string]: number } = {};
+    // Group check-ins by 15-minute intervals
+    const intervalData: { [key: string]: { time: string, checkins: number, timestamp: number } } = {};
     
     checkedInAttendees.forEach(attendee => {
       if (attendee.checkInTime) {
         const date = new Date(attendee.checkInTime);
         const hour = date.getHours();
+        const minute = date.getMinutes();
+        
+        // Round down to nearest 15-minute interval
+        const intervalMinute = Math.floor(minute / 15) * 15;
+        
+        // Create time label
         const period = hour >= 12 ? 'PM' : 'AM';
         const displayHour = hour > 12 ? hour - 12 : (hour === 0 ? 12 : hour);
-        const timeLabel = `${displayHour} ${period}`;
+        const timeLabel = `${displayHour}:${intervalMinute.toString().padStart(2, '0')} ${period}`;
         
-        hourlyData[timeLabel] = (hourlyData[timeLabel] || 0) + 1;
+        // Store both display time and timestamp for sorting
+        const timestamp = hour * 60 + intervalMinute;
+        
+        if (!intervalData[timeLabel]) {
+          intervalData[timeLabel] = { time: timeLabel, checkins: 0, timestamp };
+        }
+        intervalData[timeLabel].checkins += 1;
       }
     });
 
-    // Convert to array and sort by time
-    const sortedData = Object.entries(hourlyData)
-      .map(([time, checkins]) => ({ time, checkins }))
-      .sort((a, b) => {
-        // Simple sort for AM/PM times
-        const getHourValue = (timeStr: string) => {
-          const [hourStr, period] = timeStr.split(' ');
-          let hour = parseInt(hourStr);
-          if (period === 'PM' && hour !== 12) hour += 12;
-          if (period === 'AM' && hour === 12) hour = 0;
-          return hour;
-        };
-        return getHourValue(a.time) - getHourValue(b.time);
-      });
+    // Convert to array and sort by timestamp
+    const sortedData = Object.values(intervalData)
+      .sort((a, b) => a.timestamp - b.timestamp)
+      .map(({ time, checkins }) => ({ time, checkins }));
 
     setCheckInData(sortedData);
   };
@@ -275,18 +277,22 @@ export default function AnalyticsPage() {
       <Card>
         <CardHeader>
           <CardTitle>Check-in Trend</CardTitle>
-          <CardDescription>Number of attendee check-ins per hour.</CardDescription>
+          <CardDescription>Number of attendee check-ins per 15-minute interval.</CardDescription>
         </CardHeader>
         <CardContent>
           {checkInData.length > 0 ? (
             <ResponsiveContainer width="100%" height={350}>
-              <BarChart data={checkInData}>
+              <LineChart data={checkInData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                 <XAxis
                   dataKey="time"
                   stroke="hsl(var(--muted-foreground))"
                   fontSize={12}
                   tickLine={false}
                   axisLine={false}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
                 />
                 <YAxis
                   stroke="hsl(var(--muted-foreground))"
@@ -294,9 +300,27 @@ export default function AnalyticsPage() {
                   tickLine={false}
                   axisLine={false}
                   tickFormatter={(value) => `${value}`}
+                  label={{ value: 'Check-ins', angle: -90, position: 'insideLeft' }}
                 />
-                <Bar dataKey="checkins" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-              </BarChart>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: 'hsl(var(--background))',
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '6px',
+                  }}
+                  labelStyle={{ color: 'hsl(var(--foreground))' }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="checkins"
+                  stroke="hsl(var(--primary))"
+                  strokeWidth={2}
+                  dot={{ fill: 'hsl(var(--primary))', r: 4 }}
+                  activeDot={{ r: 6 }}
+                  name="Check-ins"
+                />
+              </LineChart>
             </ResponsiveContainer>
           ) : (
             <div className="flex items-center justify-center h-[350px] text-muted-foreground">

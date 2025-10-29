@@ -16,7 +16,7 @@ const styles = `
     100% { transform: translateY(-50%); }
   }
   .scrolling-list {
-    animation: scroll 60s linear infinite;
+    animation: scroll 90s linear infinite;
   }
   @keyframes blob {
     0% {
@@ -94,11 +94,21 @@ export default function DisplayPage() {
     };
   }, []);
 
+  // Calculate dynamic scroll speed based on number of attendees (90-120s range)
+  const scrollDuration = Math.min(120, Math.max(90, checkedInAttendees.length * 3)); // Between 90s-120s
+  
   const displayedAttendees = checkedInAttendees.length > 0 ? [...checkedInAttendees, ...checkedInAttendees] : [];
+
+  const dynamicStyles = `
+    .scrolling-list {
+      animation: scroll ${scrollDuration}s linear infinite;
+    }
+  `;
 
   return (
     <>
       <style>{styles}</style>
+      <style>{dynamicStyles}</style>
       <div className="min-h-screen relative overflow-hidden bg-gradient-to-br from-slate-950 via-blue-950 to-purple-950">
         {/* Animated Background with Blur Dots */}
         <div className="absolute inset-0 overflow-hidden">

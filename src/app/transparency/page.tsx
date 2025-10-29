@@ -1,5 +1,6 @@
 'use client';
 
+import type { Metadata } from 'next';
 import { useEffect, useState, useMemo } from 'react';
 import { collection, onSnapshot, query, orderBy, Timestamp } from 'firebase/firestore';
 import { db } from '@/lib/firebase';

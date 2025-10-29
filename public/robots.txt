@@ -1,0 +1,11 @@
+# Allow all crawlers
+User-agent: *
+Allow: /
+
+# Disallow private dashboard areas
+Disallow: /dashboard/
+Disallow: /admin/
+Disallow: /api/
+
+# Sitemap location
+Sitemap: https://aiforia.vercel.app/sitemap.xml

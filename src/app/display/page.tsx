@@ -121,7 +121,7 @@ export default function DisplayPage() {
             </h2>
             <div className="flex items-center justify-center gap-2 text-xl md:text-2xl text-slate-300">
               <Users className="h-6 w-6 text-cyan-400" />
-              <p>Welcome delegates!</p>
+              <p>Welcome attendees!</p>
             </div>
           </header>
 
@@ -227,7 +227,7 @@ export default function DisplayPage() {
                 </CardHeader>
                 <CardContent className="text-center">
                   <p className="text-4xl font-bold text-white">{totalAttendees}</p>
-                  <p className="text-sm text-purple-200 mt-1">Delegates</p>
+                  <p className="text-sm text-purple-200 mt-1">Attendees</p>
                 </CardContent>
               </Card>
             </aside>

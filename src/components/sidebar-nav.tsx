@@ -39,16 +39,19 @@ export function SidebarNav() {
 
   // Filter navigation items based on user role
   const filteredNavItems = navItems.filter((item) => {
-    // Only show Analytics and Security to admin users
-    if (item.href === '/dashboard/analytics' || item.href === '/dashboard/security') {
+    // Only show Security to admin users
+    if (item.href === '/dashboard/security') {
       return isAdmin;
     }
     
-    // Presenters only have access to Dashboard, Prizes, and Draw
+    // Analytics is now visible to all authenticated users (read-only stats)
+    
+    // Presenters only have access to Dashboard, Prizes, Draw, and Analytics
     if (isPresenter) {
       return item.href === '/dashboard' || 
              item.href === '/dashboard/prizes' || 
-             item.href === '/dashboard/drawing';
+             item.href === '/dashboard/drawing' ||
+             item.href === '/dashboard/analytics';
     }
     
     return true;

@@ -1,126 +1,92 @@
-import { Metadata } from 'next';
+'use client';
+
+import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Award, CheckCircle2, Shield, TrendingUp, Users, ArrowRight } from 'lucide-react';
-
-export const metadata: Metadata = {
-  title: 'Home',
-  description: 'AI for IA Event Dashboard - Professional event management system with QR-based check-in and transparent raffle prize drawing for academic conferences.',
-  openGraph: {
-    title: 'AI for IA - Event Dashboard & Raffle System',
-    description: 'Professional event management system with QR-based check-in and transparent raffle system for academic conferences.',
-  },
-};
+import { ThemeToggle } from '@/components/theme-toggle';
+import { Sparkles, ExternalLink } from 'lucide-react';
+import { useAuth } from '@/hooks/use-auth';
 
 export default function Home() {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!loading && user) {
+      router.push('/dashboard');
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (user) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-purple-50 dark:from-slate-950 dark:via-blue-950 dark:to-purple-950">
-      <div className="container mx-auto px-4 py-16">
-        {/* Hero Section */}
-        <div className="text-center max-w-4xl mx-auto mb-16">
-          <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-            AI for IA Event Dashboard
-          </h1>
-          <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8">
-            Professional event management system with QR-based check-in and transparent raffle prize drawing
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Button asChild size="lg" className="text-lg">
+    <div className="min-h-screen relative overflow-hidden">
+      {/* Animated Background - Same as login page */}
+      <div className="absolute inset-0 -z-10">
+        <div className="absolute top-0 -left-4 w-72 h-72 bg-purple-300 dark:bg-purple-900 rounded-full mix-blend-multiply dark:mix-blend-overlay filter blur-xl opacity-70 animate-blob"></div>
+        <div className="absolute top-0 -right-4 w-72 h-72 bg-yellow-300 dark:bg-yellow-900 rounded-full mix-blend-multiply dark:mix-blend-overlay filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+        <div className="absolute -bottom-8 left-20 w-72 h-72 bg-pink-300 dark:bg-pink-900 rounded-full mix-blend-multiply dark:mix-blend-overlay filter blur-xl opacity-70 animate-blob animation-delay-4000"></div>
+      </div>
+
+      {/* Theme Toggle */}
+      <div className="absolute top-4 right-4">
+        <ThemeToggle />
+      </div>
+
+      {/* Main Content */}
+      <div className="container mx-auto px-4 py-8 min-h-screen flex items-center justify-center">
+        <div className="max-w-3xl w-full text-center space-y-8">
+          {/* Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
+            <Sparkles className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium">AI for IA Event Dashboard</span>
+          </div>
+
+          {/* Hero Text */}
+          <div className="space-y-4">
+            <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
+              <span className="bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+                AI for IA
+              </span>
+              <span className="block">Event Dashboard</span>
+            </h1>
+            <p className="text-lg md:text-xl text-muted-foreground max-w-2xl mx-auto">
+              Professional event management system with QR-based check-in and transparent raffle prize drawing
+            </p>
+          </div>
+
+          {/* CTA Buttons */}
+          <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
+            <Button asChild size="lg" className="min-w-[200px]">
               <Link href="/transparency">
-                View Transparency <ArrowRight className="ml-2 h-5 w-5" />
+                <ExternalLink className="mr-2 h-5 w-5" />
+                View Transparency
               </Link>
             </Button>
-            <Button asChild size="lg" variant="outline" className="text-lg">
+            <Button asChild size="lg" variant="outline" className="min-w-[200px]">
               <Link href="/login">
                 Admin Login
               </Link>
             </Button>
           </div>
-        </div>
 
-        {/* Features Grid */}
-        <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto mb-16">
-          <Card>
-            <CardHeader>
-              <CheckCircle2 className="h-10 w-10 text-green-600 mb-2" />
-              <CardTitle>QR-Based Check-In</CardTitle>
-              <CardDescription>
-                Fast and efficient attendee check-in using QR code scanning
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Award className="h-10 w-10 text-yellow-600 mb-2" />
-              <CardTitle>Raffle System</CardTitle>
-              <CardDescription>
-                Fair and transparent prize drawing system for event attendees
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <TrendingUp className="h-10 w-10 text-blue-600 mb-2" />
-              <CardTitle>Real-Time Analytics</CardTitle>
-              <CardDescription>
-                Track check-ins, attendance, and event metrics in real-time
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Shield className="h-10 w-10 text-purple-600 mb-2" />
-              <CardTitle>Security First</CardTitle>
-              <CardDescription>
-                Secure authentication and role-based access control
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Users className="h-10 w-10 text-orange-600 mb-2" />
-              <CardTitle>Attendee Management</CardTitle>
-              <CardDescription>
-                Comprehensive attendee database with import/export capabilities
-              </CardDescription>
-            </CardHeader>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <Shield className="h-10 w-10 text-red-600 mb-2" />
-              <CardTitle>Public Transparency</CardTitle>
-              <CardDescription>
-                Public transparency page showing all winners and check-in logs
-              </CardDescription>
-            </CardHeader>
-          </Card>
-        </div>
-
-        {/* CTA Section */}
-        <div className="text-center max-w-2xl mx-auto">
-          <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-0">
-            <CardHeader>
-              <CardTitle className="text-3xl text-white">
-                Ready to streamline your event?
-              </CardTitle>
-              <CardDescription className="text-white/90 text-lg">
-                View our public transparency page or contact us to learn more about using this system for your academic conference.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button asChild size="lg" variant="secondary" className="text-lg">
-                <Link href="/transparency">
-                  View Transparency Page <ArrowRight className="ml-2 h-5 w-5" />
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
+          {/* Subtle Feature List */}
+          <div className="pt-8 text-sm text-muted-foreground space-y-2">
+            <p>✓ QR-Based Check-In • Real-Time Analytics • Fair Raffle System</p>
+          </div>
         </div>
       </div>
     </div>

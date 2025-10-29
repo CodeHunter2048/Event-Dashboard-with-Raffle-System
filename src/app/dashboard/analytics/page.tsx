@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { Line, LineChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
+import { Line, LineChart, Bar, BarChart, ResponsiveContainer, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHeader, TableRow, TableHead } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -15,13 +15,31 @@ interface CheckInDataPoint {
   checkins: number;
 }
 
+interface ScanLog {
+  id: string;
+  attendeeId: string;
+  attendeeName: string;
+  scannedBy: string;
+  timestamp: string;
+  action: 'checked-in' | 'already-checked-in' | 'not-found';
+}
+
+interface ScannerDataPoint {
+  scanner: string;
+  scans: number;
+  checkins: number;
+  duplicates: number;
+}
+
 export default function AnalyticsPage() {
   const { toast } = useToast();
   const [attendees, setAttendees] = useState<Attendee[]>([]);
   const [prizes, setPrizes] = useState<Prize[]>([]);
   const [winners, setWinners] = useState<Winner[]>([]);
+  const [scanLogs, setScanLogs] = useState<ScanLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [checkInData, setCheckInData] = useState<CheckInDataPoint[]>([]);
+  const [scannerData, setScannerData] = useState<ScannerDataPoint[]>([]);
 
   // Fetch real-time data from Firebase
   useEffect(() => {
@@ -148,6 +166,46 @@ export default function AnalyticsPage() {
       );
       unsubscribes.push(unsubWinners);
 
+      // Listen to scan logs collection
+      const scanLogsRef = collection(db, 'scanlogs');
+      const unsubScanLogs = onSnapshot(
+        scanLogsRef,
+        (snapshot) => {
+          const scanLogsData = snapshot.docs.map(doc => {
+            const data = doc.data();
+            
+            // Safely handle timestamp conversion
+            let timestampISO = new Date().toISOString();
+            try {
+              if (data.timestamp && typeof data.timestamp.toDate === 'function') {
+                timestampISO = data.timestamp.toDate().toISOString();
+              } else if (data.timestamp && typeof data.timestamp === 'string') {
+                timestampISO = data.timestamp;
+              }
+            } catch (e) {
+              console.warn('Error converting timestamp for scan log:', doc.id, e);
+            }
+            
+            return {
+              id: doc.id,
+              attendeeId: data.attendeeId || '',
+              attendeeName: data.attendeeName || '',
+              scannedBy: data.scannedBy || 'Unknown',
+              timestamp: timestampISO,
+              action: data.action || 'checked-in',
+            } as ScanLog;
+          });
+          setScanLogs(scanLogsData);
+          
+          // Calculate scanner statistics
+          calculateScannerStats(scanLogsData);
+        },
+        (error) => {
+          console.error('Error fetching scan logs:', error);
+        }
+      );
+      unsubscribes.push(unsubScanLogs);
+
     } catch (error) {
       console.error('Error setting up listeners:', error);
       setLoading(false);
@@ -202,6 +260,45 @@ export default function AnalyticsPage() {
     setCheckInData(sortedData);
   };
 
+  // Calculate scanner statistics
+  const calculateScannerStats = (scanLogsData: ScanLog[]) => {
+    if (scanLogsData.length === 0) {
+      setScannerData([]);
+      return;
+    }
+
+    // Group scans by scanner
+    const scannerStats: { [key: string]: { scans: number; checkins: number; duplicates: number } } = {};
+    
+    scanLogsData.forEach(log => {
+      const scanner = log.scannedBy;
+      
+      if (!scannerStats[scanner]) {
+        scannerStats[scanner] = { scans: 0, checkins: 0, duplicates: 0 };
+      }
+      
+      scannerStats[scanner].scans += 1;
+      
+      if (log.action === 'checked-in') {
+        scannerStats[scanner].checkins += 1;
+      } else if (log.action === 'already-checked-in') {
+        scannerStats[scanner].duplicates += 1;
+      }
+    });
+
+    // Convert to array and sort by total scans
+    const sortedData = Object.entries(scannerStats)
+      .map(([scanner, stats]) => ({
+        scanner,
+        scans: stats.scans,
+        checkins: stats.checkins,
+        duplicates: stats.duplicates,
+      }))
+      .sort((a, b) => b.scans - a.scans);
+
+    setScannerData(sortedData);
+  };
+
   // Calculate metrics
   const checkedInCount = attendees.filter(a => a.checkedIn).length;
   const attendanceRate = attendees.length > 0 ? ((checkedInCount / attendees.length) * 100).toFixed(1) : '0.0';
@@ -211,10 +308,25 @@ export default function AnalyticsPage() {
     ? checkInData.reduce((max, curr) => curr.checkins > max.checkins ? curr : max, checkInData[0])
     : null;
 
+  // Calculate total scans and active scanners
+  const totalScans = scanLogs.length;
+  const activeScanners = scannerData.length;
+  const topScanner = scannerData.length > 0 ? scannerData[0] : null;
+
   if (loading) {
     return (
       <div className="grid gap-6">
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-60 mt-2" />
+            </CardHeader>
+            <CardContent>
+              <Skeleton className="h-12 w-24" />
+              <Skeleton className="h-4 w-48 mt-2" />
+            </CardContent>
+          </Card>
           <Card>
             <CardHeader>
               <Skeleton className="h-6 w-40" />
@@ -242,7 +354,7 @@ export default function AnalyticsPage() {
 
   return (
     <div className="grid gap-6">
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
          <Card>
             <CardHeader>
                 <CardTitle>Attendance Rate</CardTitle>
@@ -256,7 +368,7 @@ export default function AnalyticsPage() {
           <Card>
             <CardHeader>
                 <CardTitle>Peak Check-in</CardTitle>
-                <CardDescription>The busiest hour for attendee arrivals.</CardDescription>
+                <CardDescription>The busiest time interval for arrivals.</CardDescription>
             </CardHeader>
             <CardContent>
                 {peakCheckIn ? (
@@ -270,6 +382,19 @@ export default function AnalyticsPage() {
                     <p className="text-xs text-muted-foreground">No check-ins yet.</p>
                   </>
                 )}
+            </CardContent>
+         </Card>
+         <Card>
+            <CardHeader>
+                <CardTitle>Active Scanners</CardTitle>
+                <CardDescription>Organizers/admins performing check-ins.</CardDescription>
+            </CardHeader>
+            <CardContent>
+                <div className="text-5xl font-bold">{activeScanners}</div>
+                <p className="text-xs text-muted-foreground">
+                  {totalScans} total scans
+                  {topScanner && ` • Top: ${topScanner.scanner}`}
+                </p>
             </CardContent>
          </Card>
       </div>
@@ -329,6 +454,85 @@ export default function AnalyticsPage() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Scanner Activity</CardTitle>
+            <CardDescription>Total scans performed by each organizer/admin.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {scannerData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={scannerData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis
+                    dataKey="scanner"
+                    type="category"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    width={120}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '6px',
+                    }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="scans" fill="hsl(var(--primary))" name="Total Scans" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                No scanner data available yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Check-in Performance</CardTitle>
+            <CardDescription>Successful check-ins vs. duplicate scans by scanner.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {scannerData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={scannerData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                  <XAxis type="number" stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <YAxis
+                    dataKey="scanner"
+                    type="category"
+                    stroke="hsl(var(--muted-foreground))"
+                    fontSize={12}
+                    width={120}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'hsl(var(--background))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '6px',
+                    }}
+                    labelStyle={{ color: 'hsl(var(--foreground))' }}
+                  />
+                  <Legend />
+                  <Bar dataKey="checkins" fill="hsl(var(--chart-1))" name="Successful" radius={[0, 4, 4, 0]} />
+                  <Bar dataKey="duplicates" fill="hsl(var(--chart-2))" name="Duplicates" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[300px] text-muted-foreground">
+                No scanner data available yet.
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
       
       <Card>
         <CardHeader>

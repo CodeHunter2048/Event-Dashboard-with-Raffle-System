@@ -19,7 +19,7 @@ import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Tv, Clock, Sparkles, Shield, Users } from 'lucide-react';
+import { Tv, Clock, Sparkles, Shield, Users, FileText } from 'lucide-react';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
@@ -117,6 +117,24 @@ export default function LoginForm() {
                   <CardContent>
                     <CardDescription className="text-sm">
                       View live event updates and winner announcements
+                    </CardDescription>
+                  </CardContent>
+                </Card>
+              </Link>
+
+              <Link href="/transparency" target="_blank">
+                <Card className="hover:shadow-lg transition-all cursor-pointer border-2 hover:border-primary/50 h-full">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 rounded-lg bg-primary/10">
+                        <FileText className="h-5 w-5 text-primary" />
+                      </div>
+                      <CardTitle className="text-lg">Transparency</CardTitle>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <CardDescription className="text-sm">
+                      View full history of winners and check-ins
                     </CardDescription>
                   </CardContent>
                 </Card>

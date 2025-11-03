@@ -164,6 +164,10 @@ export default function ComingSoon() {
         .animate-float {
           animation: float 3s ease-in-out infinite;
         }
+        /* Hide reCAPTCHA badge on coming soon page */
+        .grecaptcha-badge {
+          visibility: hidden !important;
+        }
       `}</style>
     </div>
   );

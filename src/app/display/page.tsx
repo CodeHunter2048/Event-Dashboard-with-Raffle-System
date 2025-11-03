@@ -49,6 +49,10 @@ const styles = `
   .animate-float {
     animation: float 3s ease-in-out infinite;
   }
+  /* Hide reCAPTCHA badge on public display */
+  .grecaptcha-badge {
+    visibility: hidden !important;
+  }
 `;
 
 export default function DisplayPage() {

@@ -1,7 +1,8 @@
 'use client';
 
-import { Calendar, Sparkles, Clock } from 'lucide-react';
+import { Calendar, Clock } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import Image from 'next/image';
 import { Card, CardContent } from '@/components/ui/card';
 
 export default function ComingSoon() {
@@ -51,7 +52,7 @@ export default function ComingSoon() {
             <div className="flex justify-center animate-float">
               <div className="relative">
                 <div className="p-4 rounded-full bg-gradient-to-br from-yellow-400/20 to-orange-500/20 border border-yellow-400/30 backdrop-blur-sm">
-                  <Sparkles className="h-12 w-12 md:h-16 md:w-16 text-yellow-400" />
+                  <Image src="/logo.png" alt="AI for IA Logo" width={64} height={64} className="w-12 h-12 md:w-16 md:h-16" />
                 </div>
                 <div className="absolute inset-0 blur-2xl bg-yellow-400 opacity-30 animate-pulse"></div>
               </div>

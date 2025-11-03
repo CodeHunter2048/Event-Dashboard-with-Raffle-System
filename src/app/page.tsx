@@ -3,9 +3,10 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/theme-toggle';
-import { Sparkles, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
 
 export default function Home() {
@@ -51,7 +52,7 @@ export default function Home() {
         <div className="max-w-3xl w-full text-center space-y-8">
           {/* Badge */}
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
-            <Sparkles className="h-4 w-4 text-primary" />
+            <Image src="/logo.png" alt="AI for IA Logo" width={16} height={16} />
             <span className="text-sm font-medium">AI for IA Event Dashboard</span>
           </div>
 

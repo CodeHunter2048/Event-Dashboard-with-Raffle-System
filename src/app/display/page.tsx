@@ -7,7 +7,8 @@ import { Badge } from '@/components/ui/badge';
 import { db } from '@/lib/firebase';
 import { collection, onSnapshot, query, where } from 'firebase/firestore';
 import { Attendee } from '@/lib/data';
-import { Users, CheckCircle2, Sparkles, User } from 'lucide-react';
+import { Users, CheckCircle2, User } from 'lucide-react';
+import Image from 'next/image';
 
 // CSS for the scrolling animation and blob effects
 const styles = `
@@ -120,7 +121,7 @@ export default function DisplayPage() {
         <div className="flex flex-col items-center justify-center p-4 lg:p-8 space-y-8 min-h-screen relative">
           <header className="text-center max-w-5xl animate-float">
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-gradient-to-r from-purple-500/20 to-cyan-500/20 border border-purple-500/30 mb-6 backdrop-blur-sm">
-              <Sparkles className="h-5 w-5 text-cyan-400 animate-pulse" />
+              <Image src="/logo.png" alt="AI for IA Logo" width={20} height={20} className="animate-pulse" />
               <span className="text-sm font-medium text-cyan-300">Live Event Dashboard</span>
             </div>
             <h1 className="text-5xl md:text-7xl font-bold mb-4 tracking-tight bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">

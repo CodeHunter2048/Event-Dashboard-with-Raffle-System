@@ -3,9 +3,11 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth, db } from '@/lib/firebase';
 import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { useGoogleReCaptcha } from 'react-google-recaptcha-v3';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -19,27 +21,79 @@ import { Label } from '@/components/ui/label';
 import { ThemeToggle } from '@/components/theme-toggle';
 import { useToast } from '@/hooks/use-toast';
 import { cn } from '@/lib/utils';
-import { Tv, Clock, Sparkles, Shield, Users, FileText } from 'lucide-react';
+import { rateLimiter } from '@/lib/rate-limiter';
+import { Tv, Clock, Shield, Users, FileText, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [rateLimitInfo, setRateLimitInfo] = useState<{
+    isBlocked: boolean;
+    remainingAttempts: number;
+    blockedUntil?: Date;
+  } | null>(null);
+  
   const router = useRouter();
   const { toast } = useToast();
+  const { executeRecaptcha } = useGoogleReCaptcha();
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsLoading(true);
 
     if (!auth || !db) {
       setError('Authentication service not initialized.');
+      setIsLoading(false);
       return;
+    }
+
+    // Check rate limit
+    const rateLimitCheck = rateLimiter.checkLimit(email);
+    if (!rateLimitCheck.isAllowed) {
+      const minutesLeft = rateLimiter.getTimeUntilReset(email);
+      setError(
+        `Too many failed login attempts. Please try again in ${minutesLeft} minute${minutesLeft !== 1 ? 's' : ''}.`
+      );
+      setRateLimitInfo({
+        isBlocked: true,
+        remainingAttempts: 0,
+        blockedUntil: rateLimitCheck.blockedUntil,
+      });
+      setIsLoading(false);
+      return;
+    }
+
+    // Execute reCAPTCHA
+    if (executeRecaptcha) {
+      try {
+        const token = await executeRecaptcha('login');
+        
+        // Verify token on server-side (optional but recommended)
+        // For now, we'll just check if token exists
+        if (!token) {
+          setError('reCAPTCHA verification failed. Please try again.');
+          setIsLoading(false);
+          return;
+        }
+      } catch (recaptchaError) {
+        console.error('reCAPTCHA error:', recaptchaError);
+        setError('Security verification failed. Please refresh and try again.');
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+      
+      // Clear rate limit on successful login
+      rateLimiter.clearAttempts(email);
+      setRateLimitInfo(null);
       
       // Log the login event
       try {
@@ -49,15 +103,45 @@ export default function LoginForm() {
           displayName: user.displayName || email.split('@')[0],
           action: 'login',
           timestamp: serverTimestamp(),
+          success: true,
         });
       } catch (logError) {
         console.error('Error logging login event:', logError);
       }
       
+      toast({
+        title: 'Login Successful',
+        description: 'Welcome back!',
+      });
+      
       router.push('/dashboard');
     } catch (error: any) {
+      // Record failed attempt
+      rateLimiter.recordAttempt(email);
+      const updatedLimit = rateLimiter.checkLimit(email);
+      setRateLimitInfo({
+        isBlocked: !updatedLimit.isAllowed,
+        remainingAttempts: updatedLimit.remainingAttempts,
+        blockedUntil: updatedLimit.blockedUntil,
+      });
+
+      // Log failed attempt
+      try {
+        await addDoc(collection(db, 'loginlogs'), {
+          email: email,
+          action: 'failed_login',
+          timestamp: serverTimestamp(),
+          success: false,
+          errorCode: error.code,
+        });
+      } catch (logError) {
+        console.error('Error logging failed login:', logError);
+      }
+
       if (error.code === 'auth/invalid-credential') {
         setError('Invalid email or password.');
+      } else if (error.code === 'auth/too-many-requests') {
+        setError('Too many failed attempts. Please try again later or contact your event administrator.');
       } else {
         setError('An unexpected error occurred. Please try again.');
         toast({
@@ -66,6 +150,8 @@ export default function LoginForm() {
           description: error.message,
         });
       }
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -88,7 +174,7 @@ export default function LoginForm() {
           <div className="space-y-8 text-center lg:text-left">
             <div className="space-y-4">
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/20">
-                <Sparkles className="h-4 w-4 text-primary" />
+                <Image src="/logo.png" alt="AI for IA Logo" width={16} height={16} />
                 <span className="text-sm font-medium">AI for IA Event Dashboard</span>
               </div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold tracking-tight">
@@ -170,7 +256,7 @@ export default function LoginForm() {
                 <span>Role-based Access</span>
               </div>
               <div className="flex items-center gap-2">
-                <Sparkles className="h-4 w-4" />
+                <Image src="/logo.png" alt="Logo" width={16} height={16} />
                 <span>Real-time Updates</span>
               </div>
             </div>
@@ -187,6 +273,16 @@ export default function LoginForm() {
               </CardHeader>
               <CardContent>
                 <form onSubmit={handleLogin} className="grid gap-4">
+                  {/* Rate Limit Warning */}
+                  {rateLimitInfo && rateLimitInfo.remainingAttempts <= 2 && rateLimitInfo.remainingAttempts > 0 && (
+                    <Alert variant="destructive">
+                      <AlertTriangle className="h-4 w-4" />
+                      <AlertDescription>
+                        Warning: {rateLimitInfo.remainingAttempts} attempt{rateLimitInfo.remainingAttempts !== 1 ? 's' : ''} remaining before temporary lockout.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
                   <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
                     <Input
@@ -196,6 +292,7 @@ export default function LoginForm() {
                       required
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={isLoading || (rateLimitInfo?.isBlocked ?? false)}
                       className={cn(error && 'border-destructive')}
                     />
                   </div>
@@ -209,17 +306,25 @@ export default function LoginForm() {
                       required
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      disabled={isLoading || (rateLimitInfo?.isBlocked ?? false)}
                       className={cn(error && 'border-destructive')}
                     />
                   </div>
                   {error && <p className="text-sm font-medium text-destructive">{error}</p>}
-                  <Button type="submit" className="w-full">
-                    Login
+                  <Button 
+                    type="submit" 
+                    className="w-full" 
+                    disabled={isLoading || (rateLimitInfo?.isBlocked ?? false)}
+                  >
+                    {isLoading ? 'Logging in...' : 'Login'}
                   </Button>
                 </form>
                 
                 <div className="mt-6 text-center text-sm text-muted-foreground">
                   <p>Need help? Contact your event administrator</p>
+                  {process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY && (
+                    <p className="mt-2 text-xs">Protected by reCAPTCHA</p>
+                  )}
                 </div>
               </CardContent>
             </Card>
